@@ -10,7 +10,8 @@ from typing import Callable, Literal, Optional
 
 import anthropic
 import chess
-from pydantic import BaseModel
+import openai
+from pydantic import BaseModel, ValidationError
 
 from app.config import Settings, get_settings
 from app.models import Game, Move
@@ -261,6 +262,108 @@ class AnthropicCoach:
         return response.parsed_output
 
 
+_THINK = re.compile(r"<think>.*?</think>", re.DOTALL)
+
+
+def _extract_json(text: str) -> str:
+    """Pull the JSON object out of a reply that may include <think> blocks or ``` fences."""
+    text = _THINK.sub("", text or "").strip()
+    start, end = text.find("{"), text.rfind("}")
+    return text[start:end + 1] if start != -1 and end > start else text
+
+
+class OpenAICompatibleCoach:
+    """Any server that speaks the OpenAI Chat Completions API: OpenAI, Google Gemini, Groq,
+    OpenRouter, or a free local model through Ollama / LM Studio."""
+
+    # Tried in order; the first one the server accepts is remembered.
+    _FORMAT_MODES = ("json_schema", "json_object", "none")
+
+    def __init__(self, settings: Optional[Settings] = None):
+        self.settings = settings or get_settings()
+        self.client = openai.OpenAI(
+            api_key=self.settings.coach_api_key or "not-needed",  # local servers ignore the key
+            base_url=self.settings.coach_base_url or None,
+            timeout=300,  # local models can be slow
+            max_retries=2,
+        )
+        self.mode_index = 0
+
+    def _request(self, messages: list[dict], output_model: type[BaseModel]) -> str:
+        schema = output_model.model_json_schema()
+        while True:
+            mode = self._FORMAT_MODES[self.mode_index]
+            kwargs = {"model": self.settings.coach_model, "messages": messages}
+            if mode == "json_schema":
+                kwargs["response_format"] = {
+                    "type": "json_schema",
+                    "json_schema": {"name": output_model.__name__, "schema": schema, "strict": False},
+                }
+            elif mode == "json_object":
+                kwargs["response_format"] = {"type": "json_object"}
+            try:
+                response = self.client.chat.completions.create(**kwargs)
+            except (openai.BadRequestError, openai.UnprocessableEntityError) as exc:
+                # Server doesn't support this response format: try a simpler one
+                if self.mode_index < len(self._FORMAT_MODES) - 1:
+                    log.info("Provider rejected response_format=%s (%s); trying a simpler mode", mode, exc)
+                    self.mode_index += 1
+                    continue
+                raise CoachError(f"The LLM server rejected the request: {exc}") from exc
+            choice = response.choices[0] if response.choices else None
+            if not choice or not choice.message or not choice.message.content:
+                raise CoachError("The model returned an empty answer.")
+            if choice.finish_reason == "length":
+                raise CoachError("The model's answer was cut off. Try a model with a larger output limit.")
+            return choice.message.content
+
+    def __call__(self, system: str, messages: list[dict], output_model: type[BaseModel]) -> BaseModel:
+        schema = json.dumps(output_model.model_json_schema())
+        system = (
+            f"{system}\n\nReply with ONLY a JSON object (no markdown, no extra text) that matches "
+            f"this JSON schema:\n{schema}"
+        )
+        convo = [{"role": "system", "content": system}, *messages]
+        try:
+            for attempt in range(2):
+                raw = self._request(convo, output_model)
+                try:
+                    return output_model.model_validate_json(_extract_json(raw))
+                except (ValidationError, ValueError) as exc:
+                    if attempt == 1:
+                        raise CoachError("The model's answer wasn't valid JSON for the expected format. "
+                                         "Try a larger or more capable model.") from exc
+                    convo += [
+                        {"role": "assistant", "content": raw},
+                        {"role": "user", "content": f"That reply did not match the schema ({str(exc)[:500]}). "
+                                                    "Reply again with ONLY the corrected JSON object."},
+                    ]
+        except openai.AuthenticationError as exc:
+            raise CoachError("The LLM API key is missing or invalid. Set COACH_API_KEY in .env.") from exc
+        except openai.NotFoundError as exc:
+            raise CoachError(f"Model '{self.settings.coach_model}' not found on the LLM server. "
+                             "Check COACH_MODEL (for Ollama, run `ollama pull <model>` first).") from exc
+        except openai.RateLimitError as exc:
+            raise CoachError("Rate limited by the LLM provider. Try again in a minute.") from exc
+        except openai.APIConnectionError as exc:
+            raise CoachError(f"Couldn't reach the LLM server at {self.settings.coach_base_url or 'the default URL'}. "
+                             "Is it running? Check COACH_BASE_URL.") from exc
+        except openai.APIStatusError as exc:
+            raise CoachError(f"LLM API error ({exc.status_code}): {exc.message}") from exc
+        raise CoachError("The model didn't return an answer.")
+
+
+def make_llm(settings: Optional[Settings] = None) -> LLMFn:
+    """Pick the LLM client from COACH_PROVIDER."""
+    settings = settings or get_settings()
+    provider = settings.coach_provider.lower()
+    if provider == "anthropic":
+        return AnthropicCoach(settings)
+    if provider in ("openai", "openai_compatible", "ollama"):
+        return OpenAICompatibleCoach(settings)
+    raise CoachError(f"Unknown COACH_PROVIDER '{settings.coach_provider}'. Use 'anthropic' or 'openai'.")
+
+
 def _guarded_call(llm: LLMFn, system: str, user_payload: dict, intro: str,
                   output_model: type[BaseModel]) -> tuple[BaseModel, dict]:
     """Call the LLM, check every move it mentions, retry once, then scrub what's left."""
@@ -295,7 +398,7 @@ def _guarded_call(llm: LLMFn, system: str, user_payload: dict, intro: str,
 def explain_move(game: Game, move: Move, previous: list[Move], llm: Optional[LLMFn] = None,
                  settings: Optional[Settings] = None) -> dict:
     settings = settings or get_settings()
-    llm = llm or AnthropicCoach(settings)
+    llm = llm or make_llm(settings)
     payload = build_move_input(game, move, previous)
     intro = (
         f"Review this {move.classification.replace('_', ' ')} and explain it like a coach. "
@@ -316,7 +419,7 @@ def explain_move(game: Game, move: Move, previous: list[Move], llm: Optional[LLM
 def summarize_game(game: Game, moves: list[Move], notes: dict[int, dict], llm: Optional[LLMFn] = None,
                    settings: Optional[Settings] = None) -> dict:
     settings = settings or get_settings()
-    llm = llm or AnthropicCoach(settings)
+    llm = llm or make_llm(settings)
     flagged = []
     for m in moves:
         if m.classification not in classify.FLAGGED:
@@ -392,7 +495,7 @@ def answer_question(game: Game, move: Move, previous: list[Move], question: str,
                     note: Optional[dict] = None, llm: Optional[LLMFn] = None,
                     settings: Optional[Settings] = None) -> dict:
     settings = settings or get_settings()
-    llm = llm or AnthropicCoach(settings)
+    llm = llm or make_llm(settings)
     checked = check_question_moves(move, question, analyse_fn)
     payload = build_move_input(game, move, previous)
     payload["engine_checked_moves_from_question"] = checked
@@ -432,7 +535,7 @@ def coach_game(game_id: int, refresh: bool = False, llm: Optional[LLMFn] = None)
         session.commit()
 
         try:
-            llm = llm or AnthropicCoach(settings)
+            llm = llm or make_llm(settings)
             notes: dict[int, dict] = {}
             failures = []
             for i, m in enumerate(targets):

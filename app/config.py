@@ -6,10 +6,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    anthropic_api_key: str = ""
+    # Which LLM writes the explanations: "anthropic" (Claude) or "openai" (any OpenAI-compatible
+    # API: OpenAI, Gemini, Groq, OpenRouter, or local Ollama / LM Studio).
+    coach_provider: str = "anthropic"
     coach_model: str = "claude-sonnet-5-5"
-    coach_effort: str = "medium"  # low | medium | high | xhigh | max
-    coach_fallbacks: bool = True  # server-side fallback model if a request is declined
+    anthropic_api_key: str = ""
+    coach_api_key: str = ""  # key for the "openai" provider (not needed for local servers)
+    coach_base_url: str = ""  # e.g. http://localhost:11434/v1 for Ollama; empty = api.openai.com
+    coach_effort: str = "medium"  # Claude only: low | medium | high | xhigh | max
+    coach_fallbacks: bool = True  # Claude only: fallback model if a request is declined
     coach_only_my_moves: bool = True  # when the colour is known, only coach the student's mistakes
 
     stockfish_path: str = "/usr/games/stockfish"

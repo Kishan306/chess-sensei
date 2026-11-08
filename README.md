@@ -1,8 +1,9 @@
 # Chess Sensei
 
 A local web app that reviews your chess games like a human coach, not an engine.
-Stockfish finds the mistakes and better moves; Claude explains *why*, using only facts
-the engine and python-chess have verified. See [PLAN.md](PLAN.md) for the full plan.
+Stockfish finds the mistakes and better moves; an LLM explains *why*, using only facts
+the engine and python-chess have verified. Use Claude, any OpenAI-compatible API, or a
+free model running on your own computer. See [PLAN.md](PLAN.md) for the full plan.
 
 ## Status
 
@@ -49,7 +50,7 @@ uvicorn app.main:app --reload
 Paste or upload a PGN (several games per file is fine). Games whose players match
 `MY_USERNAMES` get your colour set automatically; otherwise click your name in the games table
 or on the review page. Open a game and click **Get coach review** for explanations
-(needs `ANTHROPIC_API_KEY`).
+(needs an LLM, see [Choosing an LLM](#choosing-an-llm)). Everything else works without one.
 
 ## Tests
 
@@ -95,19 +96,59 @@ Each position's result is cached in the database, so re-analysing a game or anal
 a game that shares an opening is faster. Cached results are reused only if they were made
 at the same or greater `ENGINE_DEPTH`.
 
-### Coach (Claude)
+### Coach (LLM)
 
 | Variable | Default | How it works |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | – | Your Claude API key. Needed only for coach explanations, game reviews and questions. |
-| `COACH_MODEL` | `claude-sonnet-5-5` | Model that writes the explanations. |
-| `COACH_EFFORT` | `medium` | How hard the model thinks: `low`, `medium`, `high`, `xhigh`, `max`. Higher can give more careful explanations but is slower and costs more. |
-| `COACH_FALLBACKS` | `true` | If the model declines a request, it is re-run on a fallback model automatically. Only used with models that support it. |
-| `COACH_ONLY_MY_MOVES` | `true` | When your colour is known, only your mistakes are explained (fewer API calls). Set to `false` to also explain the opponent's. |
+| `COACH_PROVIDER` | `anthropic` | `anthropic` for Claude, or `openai` for any OpenAI-compatible API (OpenAI, Gemini, Groq, OpenRouter, Ollama, LM Studio). |
+| `COACH_MODEL` | `claude-sonnet-5-5` | Model name, as the provider spells it. |
+| `ANTHROPIC_API_KEY` | – | Claude API key (provider `anthropic`). |
+| `COACH_API_KEY` | – | API key for provider `openai`. Leave empty for local servers. |
+| `COACH_BASE_URL` | – | Server URL for provider `openai`. Empty means OpenAI itself. |
+| `COACH_EFFORT` | `medium` | Claude only. How hard the model thinks: `low` … `max`. Higher can be more careful but is slower and costs more. |
+| `COACH_FALLBACKS` | `true` | Claude only. If a request is declined, it is re-run on a fallback model automatically. |
+| `COACH_ONLY_MY_MOVES` | `true` | When your colour is known, only your mistakes are explained (fewer calls). `false` also explains the opponent's. |
 
-Cost: one API call per mistake plus one for the game summary (sometimes one extra call
+Cost: one call per mistake plus one for the game summary (sometimes one extra call
 if the coach mentions a move that isn't in the engine data and has to rewrite). Notes are
 saved, so opening a game again costs nothing; "Regenerate review" asks again.
+
+### Choosing an LLM
+
+Pick one block and put it in `.env`. Model names are examples; use any model the provider offers.
+
+**Free, on your own computer — [Ollama](https://ollama.com)** (no key, no internet needed after download):
+```
+COACH_PROVIDER=openai
+COACH_BASE_URL=http://localhost:11434/v1
+COACH_MODEL=qwen2.5:14b
+```
+Download the model once first with `ollama pull qwen2.5:14b`.
+**Free, local — [LM Studio](https://lmstudio.ai)**: start its local server, then
+`COACH_PROVIDER=openai`, `COACH_BASE_URL=http://localhost:1234/v1`, `COACH_MODEL=<loaded model name>`.
+
+**Free tier — Google Gemini** ([get a key](https://aistudio.google.com/apikey)):
+```
+COACH_PROVIDER=openai
+COACH_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+COACH_API_KEY=your-gemini-key
+COACH_MODEL=gemini-2.5-flash
+```
+**Free tier — Groq**: `COACH_BASE_URL=https://api.groq.com/openai/v1`, a Groq key, and e.g.
+`COACH_MODEL=llama-3.3-70b-versatile`.
+
+**OpenRouter** (many models, some free): `COACH_BASE_URL=https://openrouter.ai/api/v1`, an
+OpenRouter key, and a model id from their site.
+
+**OpenAI**: `COACH_PROVIDER=openai`, `COACH_API_KEY=sk-…`, leave `COACH_BASE_URL` empty.
+
+**Claude** (default): `COACH_PROVIDER=anthropic`, `ANTHROPIC_API_KEY=…`, `COACH_MODEL=claude-sonnet-5-5`.
+
+Quality depends on the model. The facts and the move check keep any model from inventing
+moves, but small local models (under ~7B) write weaker explanations and may fail to return
+the required JSON; 14B+ local models or the cloud options work much better. The app asks the
+server for a JSON schema response, and falls back to plain JSON mode for servers that don't
+support schemas.
 
 ### You
 
@@ -142,7 +183,8 @@ drop in winning chances (in %) caused by a move.
 - Moves following a line in [app/data/book.txt](app/data/book.txt) are **book**.
 
 ## How the coach stays accurate
-- Stockfish and python-chess decide what's true; the LLM only explains.
+- Stockfish and python-chess decide what's true; the LLM only explains. This works the same
+  with every provider.
 - For each mistake, [facts.py](app/services/facts.py) computes verified facts (hanging pieces,
   forks, pins, skewers, discovered attacks, mate threats, trapped pieces, ignored threats,
   king safety, pawn structure, development, activity) and sends them with the engine lines.
@@ -155,5 +197,6 @@ drop in winning chances (in %) caused by a move.
 
 [GPL-3.0](LICENSE). The app uses [python-chess](https://github.com/niklasf/python-chess) (GPL-3.0)
 and is designed to run with [Stockfish](https://stockfishchess.org/) (GPL-3.0, not included).
+Python SDKs used for the coach: `anthropic` (MIT) and `openai` (Apache-2.0).
 Front-end libraries loaded from a CDN: cm-chessboard (MIT), chess.js (BSD-2), Chart.js (MIT).
 The thumbs-up badge icon is from Material Icons (Apache-2.0).

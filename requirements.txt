@@ -8,3 +8,4 @@ python-dotenv==1.1.0
 pytest==8.3.5
 httpx==0.28.1
 anthropic==2.6.0
+openai==3.46.0

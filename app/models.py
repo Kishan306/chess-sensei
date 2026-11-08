@@ -57,11 +57,13 @@ class Move(SQLModel, table=True):
     classification: Optional[str] = None
     phase: Optional[str] = None
     facts: Optional[dict] = Field(default=None, sa_column=Column(JSON))
+    tags: Optional[list] = Field(default=None, sa_column=Column(JSON))  # weakness tags from facts
 
 
 class EvalCache(SQLModel, table=True):
     fen: str = Field(primary_key=True)  # EPD (FEN without move clocks)
-    depth: int
+    depth: int  # depth the search actually reached
+    time_limit: Optional[float] = None  # seconds the search was allowed
     multipv: list = Field(sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=_now)
 

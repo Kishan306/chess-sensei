@@ -47,6 +47,11 @@ header.top {
 }
 header.top h1 { font-size: 1.15rem; margin: 0; }
 header.top a { text-decoration: none; color: inherit; }
+nav.menu { margin-left: auto; display: flex; gap: 4px; }
+nav.menu a { padding: 6px 12px; border-radius: 6px; color: var(--muted); font-weight: 500; }
+nav.menu a:hover { background: var(--bg); color: var(--text); }
+nav.menu a.active { background: var(--bg); color: var(--text); font-weight: 600; }
+@media (max-width: 600px) { header.top { flex-wrap: wrap; } nav.menu { margin-left: 0; } }
 
 main { max-width: 1280px; margin: 0 auto; padding: 20px 16px; }
 
@@ -195,7 +200,7 @@ table.games th { color: var(--muted); font-weight: 500; }
   margin-top: 12px; padding: 8px 10px; border-radius: 6px;
   border-left: 4px solid var(--accent); background: var(--bg);
 }
-.tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.tags { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 4px; }
 .tag { font-size: 0.75rem; padding: 2px 8px; border-radius: 999px; background: var(--bg); border: 1px solid var(--border); color: var(--muted); }
 button.show-line { font-size: 0.85rem; padding: 3px 10px; margin-top: 2px; }
 button.link { background: none; border: none; padding: 0; color: var(--accent); font-weight: 600; text-decoration: underline; cursor: pointer; }

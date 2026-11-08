@@ -131,3 +131,87 @@ def test_forty_move_game_is_fast_enough(fixture_text):
         moves = build_moves(1, fixture_text("forty_moves.pgn"), a.analyse, settings)
     assert len(moves) == 80
     assert time.monotonic() - start < 120
+
+
+# ---------- deep re-check of mistakes ----------
+
+def _scored(scores: dict[str, int], default=0):
+    """Fake analyser: White-POV cp by EPD, best move = first legal move. Records calls."""
+    calls = []
+
+    def analyse(board):
+        calls.append(board.epd())
+        mv = sorted(board.legal_moves, key=lambda m: m.uci())[0]
+        return [{"uci": [mv.uci()], "san": [board.san(mv)], "cp": scores.get(board.epd(), default), "mate": None}]
+
+    analyse.calls = calls
+    return analyse
+
+
+PGN = '[White "a"]\n[Black "b"]\n\n1. h3 a6 2. h4 a5 *'
+
+
+def test_deep_pass_clears_a_false_blunder():
+    after_h4 = _epd_after(["h3", "a6", "h4"])
+    quick = _scored({after_h4: -600})  # shallow search thinks 2. h4 loses
+    deep = _scored({})  # deeper search: it's equal
+    moves = build_moves(1, PGN, quick, Settings(), deep_fn=deep)
+    h4 = moves[2]
+    assert h4.classification not in ("blunder", "mistake", "inaccuracy")
+    assert h4.eval_after_cp == 0
+    # The bad reading made both 2. h4 and 2... a5 look wrong, so only the positions around
+    # those two moves are re-searched, not the whole game.
+    assert set(deep.calls) == {_epd_after(["h3", "a6"]), after_h4, _epd_after(["h3", "a6", "h4", "a5"])}
+    assert moves[3].classification not in ("blunder", "mistake", "inaccuracy")
+
+
+def test_deep_pass_catches_a_hidden_mistake():
+    after_h4 = _epd_after(["h3", "a6", "h4"])
+    quick = _scored({after_h4: -80})  # near-miss: ~7% drop, not flagged yet
+    deep = _scored({after_h4: -250})  # deeper search: it's a real mistake
+    moves = build_moves(1, PGN, quick, Settings(), deep_fn=deep)
+    assert moves[2].classification in ("mistake", "blunder")
+    assert moves[2].tags is not None  # facts/tags computed from the deep result
+
+
+def test_no_deep_pass_when_nothing_suspicious():
+    deep = _scored({})
+    build_moves(1, PGN, _scored({}), Settings(), deep_fn=deep)
+    assert deep.calls == []
+
+
+class _FakeEngine:
+    def __init__(self, depth):
+        self.depth = depth
+        self.calls = 0
+
+    def analyse(self, board, limit, multipv):
+        self.calls += 1
+        mv = next(iter(board.legal_moves))
+        return [{"pv": [mv], "score": chess.engine.PovScore(chess.engine.Cp(20), chess.WHITE), "depth": self.depth}]
+
+
+def test_cache_stores_reached_depth_and_reuses_by_budget():
+    import chess.engine  # noqa: F401
+
+    db = create_engine("sqlite://")
+    SQLModel.metadata.create_all(db)
+    with Session(db) as session:
+        a = EngineAnalyzer(session, Settings(engine_depth=18, engine_time=0.5, engine_deep_depth=24, engine_deep_time=3))
+        a.engine = _FakeEngine(depth=12)  # quick search times out at depth 12
+        board = chess.Board()
+
+        a.analyse(board)
+        row = session.get(EvalCache, board.epd())
+        assert (row.depth, row.time_limit) == (12, 0.5)
+
+        a.analyse(board)  # same budget: reused even though depth 18 wasn't reached
+        assert a.engine.calls == 1
+
+        a.engine.depth = 24
+        a.analyse(board, deep=True)  # bigger budget: searched again
+        assert a.engine.calls == 2 and session.get(EvalCache, board.epd()).depth == 24
+
+        a.analyse(board)  # deep result is good enough for a quick request too
+        assert a.engine.calls == 2
+        a.engine = None

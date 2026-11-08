@@ -203,7 +203,7 @@ Input: all flagged moves + their coach notes + the eval graph. Output: the 2–3
 - Game summary + follow-up questions.
 - **Done when:** every flagged move has a detailed explanation that only mentions verified moves, and fact-extraction tests pass.
 
-### Phase 3 — Personal profile + training ⏳ Next
+### Phase 3 — Personal profile + training 🚧 In progress (milestone 3.1 of 5 done)
 - Aggregate theme tags, phases, openings and results across games → profile page ("you blunder most in the middlegame; 40% of your mistakes are hanging pieces").
 - The coach gets the profile so it can point out recurring patterns in new reviews.
 - Puzzles from my own mistakes (find the best move from the position before my error), SM-2 spaced repetition, multi-move solutions validated against the engine PV.
@@ -242,4 +242,4 @@ uvicorn app.main:app --reload
 # open http://localhost:8000
 ```
 
-**Status:** Phases 1 and 2 are done. Next up: Phase 3.
+**Status:** Phases 1 and 2 are done. Phase 3: milestone 3.1 (weakness tags) done; next is 3.2 (profile page).

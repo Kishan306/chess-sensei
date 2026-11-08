@@ -11,7 +11,7 @@ free model running on your own computer. See [PLAN.md](PLAN.md) for the full pla
 |---|---|---|
 | 1 | PGN upload, Stockfish analysis, move classification, review page | ✅ Done |
 | 2 | Coach explanations, game summary, follow-up questions | ✅ Done |
-| 3 | Personal weakness profile + puzzles from your own mistakes | ⏳ Next |
+| 3 | Personal weakness profile + puzzles from your own mistakes | 🚧 In progress (3.1 weakness tags done) |
 | 4 | Learning from chess-book PDFs | Not started |
 
 ## Features
@@ -27,6 +27,8 @@ free model running on your own computer. See [PLAN.md](PLAN.md) for the full pla
 - Game review: turning points, how the game was decided, a strength, the main weakness and one
   thing to practise.
 - Follow-up questions about any position; moves you mention are checked by Stockfish first.
+- Weakness tags on every mistake (hanging piece, allowed fork, missed mate, ignored threat, …),
+  worked out from verified facts, so they work without an LLM.
 
 ## Setup (WSL / Ubuntu, Python 3.11+)
 
@@ -87,14 +89,22 @@ the server after changing them. Engine and threshold changes only apply to games
 |---|---|---|
 | `STOCKFISH_PATH` | `/usr/games/stockfish` | Path to the Stockfish binary. Analysis and follow-up questions need it. |
 | `ENGINE_DEPTH` | `18` | How deep Stockfish searches each position. Higher = stronger but slower. |
-| `ENGINE_TIME` | `0.5` | Max seconds per position. Search stops at the depth **or** the time limit, whichever comes first, so a 40-move game takes roughly 30–60 s. |
+| `ENGINE_TIME` | `0.5` | Max seconds per position in the quick pass. Search stops at the depth **or** the time limit, whichever comes first. |
+| `ENGINE_DEEP_DEPTH` | `24` | Depth for the second, deeper look at mistakes (see below). |
+| `ENGINE_DEEP_TIME` | `3` | Max seconds per position in that deeper look. `0` turns it off. |
 | `ENGINE_MULTIPV` | `3` | How many top moves are stored per position. They show under "Top engine moves" and are given to the coach as alternatives. |
 | `ENGINE_THREADS` | `4` | CPU threads Stockfish may use. Set to your core count or less. |
 | `ENGINE_HASH_MB` | `256` | Memory for Stockfish's search table. More helps a little at higher depths. |
 
-Each position's result is cached in the database, so re-analysing a game or analysing
-a game that shares an opening is faster. Cached results are reused only if they were made
-at the same or greater `ENGINE_DEPTH`.
+**Two passes.** Every position first gets a quick search. A short search can misjudge
+sharp positions, so the positions before and after every mistake (and every near-miss)
+are then searched again, deeper, and those moves are re-classified. Labels end up as
+reliable as a deep search while most of the game stays fast: a typical 40-move game
+takes about 1–2 minutes.
+
+**Cache.** Each position's result is saved, with the depth the search actually reached and
+the time it was allowed. A saved result is reused when it had at least the same budget, so
+re-analysing is fast; raising `ENGINE_DEPTH`/`ENGINE_TIME` makes positions get searched again.
 
 ### Coach (LLM)
 

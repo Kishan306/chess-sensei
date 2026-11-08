@@ -256,7 +256,7 @@ function coachSection(m) {
     note.alternatives?.length ? el("div", {}, el("h4", {}, "Other options"),
       el("ul", {}, ...note.alternatives.map((a) => el("li", {}, el("strong", {}, a.move), " — ", a.comment)))) : "",
     note.principle ? el("div", { class: "principle" }, el("strong", {}, "Remember: "), note.principle) : "",
-    note.theme_tags?.length ? el("div", { class: "tags" }, ...note.theme_tags.map((t) => el("span", { class: "tag" }, t.replace(/_/g, " ")))) : "");
+  );
 }
 
 async function explainMove(m) {
@@ -331,6 +331,14 @@ function engineDetails(m) {
       ] : [])));
 }
 
+/** Weakness tags: verified fact tags first, then any extra tags from the coach. */
+function tagRow(m) {
+  const tags = [...(m.tags || [])];
+  for (const t of game.notes?.[m.id]?.theme_tags || []) if (!tags.includes(t)) tags.push(t);
+  if (!tags.length) return "";
+  return el("div", { class: "tags" }, ...tags.map((t) => el("span", { class: "tag" }, t.replace(/_/g, " "))));
+}
+
 function renderMoveInfo() {
   const box = document.getElementById("move-info");
   const scroll = box.scrollTop;
@@ -343,6 +351,7 @@ function renderMoveInfo() {
   const cls = m.classification;
   box.replaceChildren(
     el("div", { class: "headline" }, moveLabel(m), " ", el("span", { class: `c-${cls}` }, `— ${LABELS[cls] || cls}`)),
+    FLAGGED.includes(cls) ? tagRow(m) : "",
     FLAGGED.includes(cls) ? coachSection(m) : "",
     engineDetails(m),
     askSection(m));

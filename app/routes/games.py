@@ -8,7 +8,7 @@ from app.db import get_session
 from app.models import CoachNote, Game, GameSummary, Move
 from app.schemas import GameDetail, GameListItem, GameUpdate, UploadError, UploadResult
 from app.services import pgn_service
-from app.services.engine_service import analyze_game, clear_coaching, moves_for_game
+from app.services.engine_service import analyze_game, clear_coaching, ensure_tags, moves_for_game
 
 router = APIRouter(prefix="/api/games", tags=["games"])
 
@@ -87,6 +87,7 @@ def _get_game(session: Session, game_id: int) -> Game:
 def get_game(game_id: int, session: Session = Depends(get_session)):
     game = _get_game(session, game_id)
     moves = moves_for_game(session, game_id)
+    ensure_tags(session, moves)
     notes = session.exec(select(CoachNote).where(CoachNote.move_id.in_([m.id for m in moves]))).all()
     summary = session.exec(select(GameSummary).where(GameSummary.game_id == game_id)).first()
     return GameDetail(

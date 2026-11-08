@@ -16,16 +16,10 @@ from pydantic import BaseModel, ValidationError
 from app.config import Settings, get_settings
 from app.models import Game, Move
 from app.services import classify, facts as facts_mod
+from app.services.tags import THEME_TAGS
 
 log = logging.getLogger(__name__)
 
-THEME_TAGS = (
-    "hanging_piece", "missed_capture", "missed_fork", "allowed_fork", "missed_pin", "allowed_pin",
-    "skewer", "discovered_attack", "back_rank", "missed_mate", "allowed_mate", "mate_threat",
-    "trapped_piece", "ignored_threat", "king_safety", "pawn_structure", "passed_pawn",
-    "development", "early_queen", "piece_activity", "bad_trade", "endgame_technique",
-    "calculation", "overlooked_check", "missed_win", "opening_principles",
-)
 ThemeTag = Literal[THEME_TAGS]  # type: ignore[valid-type]
 
 # Models that accept the server-side refusal fallback (`fallbacks: "default"`).

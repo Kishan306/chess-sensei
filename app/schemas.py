@@ -52,6 +52,7 @@ class MoveOut(BaseModel):
     multipv: Optional[list]
     classification: Optional[str]
     phase: Optional[str]
+    tags: Optional[list] = None
 
 
 class GameDetail(GameListItem):

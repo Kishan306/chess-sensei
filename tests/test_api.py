@@ -78,7 +78,7 @@ class _FakeAnalyzer:
     def __exit__(self, *exc):
         return False
 
-    def analyse(self, board):
+    def analyse(self, board, deep=False):
         mv = sorted(board.legal_moves, key=lambda m: m.uci())[0]
         return [{"uci": [mv.uci()], "san": [board.san(mv)], "cp": 0, "mate": None}]
 
@@ -108,7 +108,7 @@ def test_analysis_end_to_end_with_fake_engine(client, fixture_text, monkeypatch)
 class _BlunderAnalyzer(_FakeAnalyzer):
     """Equal everywhere except after 2...Qg5, where White wins the queen."""
 
-    def analyse(self, board):
+    def analyse(self, board, deep=False):
         if board.epd() == "rnb1kbnr/pppp1ppp/8/4p1q1/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq -":
             return [{"uci": ["f3g5"], "san": ["Nxg5"], "cp": 900, "mate": None}]
         return super().analyse(board)
@@ -170,3 +170,15 @@ def test_coach_endpoints_with_fakes(client, fixture_text, monkeypatch):
     client.post(f"/api/games/{gid}/analyze")
     game = client.get(f"/api/games/{gid}").json()
     assert game["notes"] == {} and game["summary"] is None and game["coach_status"] == "none"
+
+
+def test_tags_in_game_detail_and_new_pages(client, fixture_text, monkeypatch):
+    from app.services import engine_service
+
+    monkeypatch.setattr(engine_service, "EngineAnalyzer", _BlunderAnalyzer)
+    gid = client.post("/api/games", data={"pgn": fixture_text("queen_blunder.pgn")}).json()["created"][0]
+    client.post(f"/api/games/{gid}/analyze")
+    qg5 = next(m for m in client.get(f"/api/games/{gid}").json()["moves"] if m["san"] == "Qg5")
+    assert "hanging_piece" in qg5["tags"]
+    for page in ("/profile", "/puzzles"):
+        assert client.get(page).status_code == 200

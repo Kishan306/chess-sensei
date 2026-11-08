@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     engine_depth: int = 18
     engine_time: float = 0.5  # seconds per position; whichever of depth/time comes first
     engine_multipv: int = 3
+    # Deeper second look at the positions around each mistake (0 = off)
+    engine_deep_depth: int = 24
+    engine_deep_time: float = 3.0
     engine_threads: int = 4
     engine_hash_mb: int = 256
 

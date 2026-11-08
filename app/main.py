@@ -32,6 +32,16 @@ def index():
     return FileResponse(STATIC / "index.html")
 
 
+@app.get("/profile", include_in_schema=False)
+def profile_page():
+    return FileResponse(STATIC / "profile.html")
+
+
+@app.get("/puzzles", include_in_schema=False)
+def puzzles_page():
+    return FileResponse(STATIC / "puzzles.html")
+
+
 @app.get("/review/{game_id}", include_in_schema=False)
 def review(game_id: int):
     return FileResponse(STATIC / "review.html")

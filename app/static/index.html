@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chess Sensei</title>
+  <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+  <header class="top"><h1><a href="/">Chess Sensei</a></h1></header>
+  <main>
+    <section class="card">
+      <h2>Add games</h2>
+      <form id="upload-form">
+        <textarea name="pgn" placeholder="Paste one or more PGN games here…"></textarea>
+        <div class="row">
+          <input type="file" name="file" accept=".pgn,text/plain">
+          <label><input type="checkbox" name="analyze" value="true" checked> Analyse right away</label>
+          <button class="primary" type="submit">Upload</button>
+        </div>
+      </form>
+      <div id="upload-result"></div>
+    </section>
+
+    <section class="card">
+      <h2>Your games</h2>
+      <table class="games">
+        <thead>
+          <tr><th>Players <span class="muted">(click your name)</span></th><th>Result</th><th>Opening</th><th>Date</th><th>Analysis</th><th></th></tr>
+        </thead>
+        <tbody id="games"></tbody>
+      </table>
+      <p class="muted" id="empty" hidden>No games yet. Paste a PGN above.</p>
+    </section>
+  </main>
+  <script type="module" src="/static/js/home.js"></script>
+</body>
+</html>

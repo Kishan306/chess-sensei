@@ -1,0 +1,9 @@
+[Event "Timing fixture (random legal moves)"]
+[Site "?"]
+[Date "????.??.??"]
+[Round "?"]
+[White "Player123"]
+[Black "Random"]
+[Result "*"]
+
+1. f4 Nf6 2. c3 d5 3. h3 Bxh3 4. g3 Bxf1 5. Kxf1 b5 6. Rh2 Ng8 7. Kg2 h5 8. Rxh5 Rxh5 9. a4 b4 10. Nh3 Rxh3 11. Kxh3 bxc3 12. Ra2 cxd2 13. b3 Kd7 14. Bxd2 f5 15. Nc3 a6 16. Nxd5 e5 17. fxe5 Be7 18. Qf1 Nf6 19. Qf2 Nxd5 20. Qxf5+ Kc6 21. Bc3 Nxc3 22. Ra3 Bxa3 23. Qc2 g6 24. Qd1 Bc5 25. Qxd8 Nxa4 26. Qd5+ Kxd5 27. bxa4 Kxe5 28. Kg2 Kf5 29. e3 Bxe3 30. Kf3 Ke6 31. Kg4 Kf6 32. Kh4 Bd4 33. Kg4 Be5 34. a5 Bxg3 35. Kxg3 Kf7 36. Kh2 g5 37. Kg3 Ke8 38. Kg4 Kd8 39. Kxg5 c6 40. Kg6 Ke7 *

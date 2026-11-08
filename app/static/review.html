@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Game Review</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cm-chessboard@8.7.8/assets/chessboard.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cm-chessboard@8.7.8/assets/extensions/arrows/arrows.css">
+  <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+  <header class="top"><h1><a href="/">Chess Sensei</a></h1><span id="title" class="muted"></span></header>
+  <main>
+    <section class="card" id="status-card" hidden></section>
+
+    <section class="card">
+      <h2>Summary</h2>
+      <div class="row players-row" id="players"></div>
+      <div class="summary" id="summary"></div>
+    </section>
+
+    <section class="card">
+      <h2>Coach review</h2>
+      <div id="coach-review"></div>
+    </section>
+
+    <div class="review">
+      <div class="board-col">
+        <div class="board-wrap">
+          <div class="evalbar" id="evalbar" title="Evaluation">
+            <div class="evalbar-fill"></div>
+            <span class="evalbar-label"></span>
+          </div>
+          <div id="board"></div>
+        </div>
+        <div class="nav" id="nav"></div>
+        <div class="card chart-box"><canvas id="chart"></canvas></div>
+      </div>
+
+      <div class="side">
+        <section class="card move-info" id="move-info"></section>
+        <section class="card">
+          <h2>Moves</h2>
+          <div class="movelist" id="movelist"></div>
+        </section>
+      </div>
+    </div>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script type="module" src="/static/js/review.js"></script>
+</body>
+</html>

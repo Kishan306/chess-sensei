@@ -1,0 +1,217 @@
+:root {
+  --bg: #f6f5f2;
+  --panel: #ffffff;
+  --text: #22211f;
+  --muted: #6d6a64;
+  --border: #e2dfd8;
+  --accent: #2f6f4f;
+  --accent-text: #ffffff;
+  --inaccuracy: #d9a90f;
+  --mistake: #f08a2c;
+  --blunder: #fa412d;
+  --missed: #ff7769;
+  --best: #5f9a2e;
+  --book: #a88865;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1b1b1a;
+    --panel: #252523;
+    --text: #ecebe7;
+    --muted: #a19e97;
+    --border: #3a3936;
+    --accent: #4f9c74;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.45;
+}
+
+a { color: var(--accent); }
+
+header.top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+header.top h1 { font-size: 1.15rem; margin: 0; }
+header.top a { text-decoration: none; color: inherit; }
+
+main { max-width: 1280px; margin: 0 auto; padding: 20px 16px; }
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.card h2 { margin: 0 0 12px; font-size: 1rem; }
+
+textarea {
+  width: 100%;
+  min-height: 160px;
+  font-family: ui-monospace, monospace;
+  font-size: 0.85rem;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+button, .btn {
+  font: inherit;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+button:disabled { opacity: 0.5; cursor: default; }
+
+.row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+.muted { color: var(--muted); font-size: 0.9rem; }
+.error { color: var(--blunder); }
+.errors li { color: var(--blunder); }
+
+table.games { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+table.games th, table.games td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); }
+table.games th { color: var(--muted); font-weight: 500; }
+
+.progress { width: 120px; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; display: inline-block; vertical-align: middle; }
+.progress > div { height: 100%; background: var(--accent); }
+
+/* ---------- review page ---------- */
+.review { display: grid; grid-template-columns: minmax(280px, 590px) 1fr; gap: 20px; align-items: start; }
+/* Board stays put while the page scrolls */
+.board-col { position: sticky; top: 12px; }
+@media (max-width: 900px) {
+  .review { grid-template-columns: 1fr; }
+  .board-col { position: static; }
+}
+
+/* Board with the evaluation bar on its left */
+.board-wrap { display: flex; gap: 6px; max-width: 590px; }
+#board { flex: 1; min-width: 0; aspect-ratio: 1; }
+
+.evalbar {
+  position: relative; width: 24px; flex: none; overflow: hidden;
+  border-radius: 4px; background: #403d39; border: 1px solid var(--border);
+}
+.evalbar-fill {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  background: #f2f1ee; transition: height 0.3s ease;
+}
+.evalbar.flipped .evalbar-fill { bottom: auto; top: 0; }
+.evalbar-label {
+  position: absolute; left: 0; right: 0; top: 4px; text-align: center;
+  font-size: 0.65rem; font-weight: 700; color: #f2f1ee; letter-spacing: -0.02em;
+}
+.evalbar-label.at-bottom { top: auto; bottom: 4px; }
+.evalbar-label.on-white { color: #403d39; }
+/* Fixed height: switching to line playback must not move anything below the board */
+.nav { display: flex; gap: 6px; justify-content: center; align-items: center; margin: 10px 0; height: 34px; }
+.nav.line-mode { justify-content: flex-start; }
+.nav .line-text {
+  flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-family: ui-monospace, monospace; font-size: 0.85rem;
+}
+.chart-box { position: relative; height: 160px; }
+
+.side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+.movelist { height: 300px; overflow-y: auto; overscroll-behavior: contain; font-size: 0.92rem; }
+/* Fixed height so stepping through moves never pushes the panels below up or down */
+.move-info { height: 480px; overflow-y: auto; overscroll-behavior: contain; }
+.movelist table { width: 100%; border-collapse: collapse; }
+.movelist td { padding: 3px 6px; }
+.movelist td.num { color: var(--muted); width: 36px; }
+.movelist .mv { cursor: pointer; border-radius: 4px; padding: 2px 6px; display: inline-block; }
+.movelist .mv:hover { background: var(--border); }
+.movelist .mv.current { background: var(--accent); color: var(--accent-text); }
+
+.badge { font-weight: 700; margin-left: 2px; }
+.badge-icon { vertical-align: -3px; margin-left: 3px; }
+.cm-chessboard .move-badge { pointer-events: none; }
+.c-inaccuracy { color: var(--inaccuracy); }
+.c-mistake { color: var(--mistake); }
+.c-blunder { color: var(--blunder); }
+.c-missed_win { color: var(--missed); }
+.c-best { color: var(--best); }
+.c-book { color: var(--book); }
+.mv.current .badge { color: inherit; }
+
+.summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.summary .side-stats { display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.92rem; }
+.summary .me { font-weight: 600; }
+
+.move-info .headline { font-size: 1.05rem; font-weight: 600; margin-bottom: 6px; }
+.move-info .line { font-family: ui-monospace, monospace; font-size: 0.85rem; overflow-wrap: anywhere; }
+.move-info dt { color: var(--muted); font-size: 0.85rem; margin-top: 8px; }
+.move-info dd { margin: 2px 0 0; }
+
+/* Best-move arrow (green). Played move uses the built-in red "danger" arrow. */
+.cm-chessboard .arrow-best .arrow-head { fill: #1f9d55; fill-opacity: 1; }
+.cm-chessboard .arrow-best .arrow-line { stroke: #1f9d55; stroke-linecap: round; opacity: 0.6; }
+
+/* ---------- "which player are you?" control ---------- */
+.players { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.players .player {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--panel); color: var(--text);
+}
+.players .player:hover { border-color: var(--accent); }
+.players .player.me { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
+.players .player .elo { font-size: 0.8rem; opacity: 0.7; }
+.players .player .you {
+  font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em;
+  background: rgba(255,255,255,0.25); padding: 1px 6px; border-radius: 999px;
+}
+.players.unset .player { border-style: dashed; }
+.players-row { margin: 0 0 12px; }
+.move-info .plain { margin: 4px 0 8px; }
+
+/* ---------- coach ---------- */
+.coach { margin: 8px 0 12px; }
+.coach h4, .ask h4 { margin: 12px 0 2px; font-size: 0.85rem; color: var(--muted); font-weight: 600; }
+.coach p { margin: 2px 0 6px; }
+.coach-headline { font-weight: 600; font-size: 1rem; }
+.principle {
+  margin-top: 12px; padding: 8px 10px; border-radius: 6px;
+  border-left: 4px solid var(--accent); background: var(--bg);
+}
+.tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.tag { font-size: 0.75rem; padding: 2px 8px; border-radius: 999px; background: var(--bg); border: 1px solid var(--border); color: var(--muted); }
+button.show-line { font-size: 0.85rem; padding: 3px 10px; margin-top: 2px; }
+button.link { background: none; border: none; padding: 0; color: var(--accent); font-weight: 600; text-decoration: underline; cursor: pointer; }
+
+details.engine { margin: 10px 0; }
+details.engine summary { cursor: pointer; color: var(--muted); font-size: 0.9rem; }
+
+.ask textarea { min-height: 0; font-family: inherit; font-size: 0.9rem; }
+.ask .row { margin-top: 6px; }
+.qa { margin: 8px 0; padding: 8px 10px; border-radius: 6px; background: var(--bg); }
+.qa .q { font-weight: 600; margin: 0 0 4px; }
+.qa p { margin: 0; }
+
+#coach-review h3 { font-size: 0.9rem; margin: 8px 0 4px; color: var(--muted); }
+#coach-review p { margin: 0 0 6px; }
+.review-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.turning { margin: 0; padding-left: 20px; }
+.turning li { margin-bottom: 6px; }
+.practice { margin-top: 12px; padding: 10px 12px; border-radius: 6px; background: var(--bg); border-left: 4px solid var(--accent); }

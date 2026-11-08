@@ -1,0 +1,10 @@
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+chess==1.11.2
+sqlmodel==0.0.24
+pydantic-settings==2.9.1
+python-multipart==0.0.20
+python-dotenv==1.1.0
+pytest==8.3.5
+httpx==0.28.1
+anthropic==2.6.0

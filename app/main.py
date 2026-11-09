@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.db import create_db_and_tables, reset_interrupted_analyses
+from app.db import backfill_fingerprints, create_db_and_tables, reset_interrupted_analyses
 from app.routes import analysis, coach, games
 
 logging.basicConfig(level=logging.INFO)
@@ -17,6 +17,7 @@ STATIC = Path(__file__).resolve().parent / "static"
 async def lifespan(_: FastAPI):
     create_db_and_tables()
     reset_interrupted_analyses()
+    backfill_fingerprints()
     yield
 
 

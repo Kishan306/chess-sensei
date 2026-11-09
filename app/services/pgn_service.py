@@ -1,4 +1,5 @@
 """Parse and validate PGN text, split multi-game files, detect the user's colour."""
+import hashlib
 import io
 import re
 from dataclasses import dataclass, field
@@ -91,6 +92,30 @@ def detect_my_color(headers: dict, usernames: list[str]) -> Optional[str]:
     return None
 
 
+def source_url(headers: dict) -> Optional[str]:
+    """The game's own link, if the PGN has one (Lichess: Site, Chess.com: Link)."""
+    for key in ("Link", "Site"):
+        value = (headers.get(key) or "").strip()
+        if value.startswith(("http://", "https://")) and any(
+            host in value for host in ("lichess.org/", "chess.com/")
+        ):
+            url = value.split("#")[0].split("?")[0].rstrip("/").lower()  # drop ?move=0 etc.
+            return re.sub(r"^http://", "https://", url)
+    return None
+
+
+def fingerprint(headers: dict, sans: list[str]) -> str:
+    """Same players + same date + same moves = same game."""
+    date = headers.get("UTCDate") or headers.get("Date", "")
+    parts = [
+        headers.get("White", "").strip().lower(),
+        headers.get("Black", "").strip().lower(),
+        date.strip(),
+        " ".join(sans),
+    ]
+    return hashlib.sha256("|".join(parts).encode()).hexdigest()
+
+
 def game_fields(parsed: ParsedGame, usernames: list[str]) -> dict:
     """Map PGN headers to Game model fields."""
     h = parsed.headers
@@ -113,4 +138,6 @@ def game_fields(parsed: ParsedGame, usernames: list[str]) -> dict:
         "opening_eco": h.get("ECO", ""),
         "opening_name": opening,
         "my_color": detect_my_color(h, usernames),
+        "fingerprint": fingerprint(h, parsed.sans),
+        "source_url": source_url(h),
     }

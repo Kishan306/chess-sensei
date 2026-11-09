@@ -18,6 +18,11 @@ form.addEventListener("submit", async (e) => {
     if (!res.ok) throw new Error(body.detail || res.statusText);
     const parts = [];
     if (body.created.length) parts.push(el("p", {}, `Added ${body.created.length} game(s).`));
+    if (body.duplicates?.length) {
+      parts.push(el("ul", { class: "duplicates" }, ...body.duplicates.map((d) =>
+        el("li", {}, `Game ${d.game_index}: already uploaded (${d.label}) — `,
+          el("a", { href: `/review/${d.existing_id}` }, "open it")))));
+    }
     if (body.errors.length) {
       parts.push(el("ul", { class: "errors" },
         ...body.errors.map((er) => el("li", {}, er.game_index ? `Game ${er.game_index}: ${er.message}` : er.message))));

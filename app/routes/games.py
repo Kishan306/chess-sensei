@@ -6,7 +6,7 @@ from sqlmodel import Session, delete, select
 from app.config import get_settings
 from app.db import get_session
 from app.models import CoachNote, Game, GameSummary, Move
-from app.schemas import GameDetail, GameListItem, GameUpdate, UploadError, UploadResult
+from app.schemas import GameDetail, GameListItem, GameUpdate, UploadDuplicate, UploadError, UploadResult
 from app.services import pgn_service
 from app.services.engine_service import analyze_game, clear_coaching, ensure_tags, moves_for_game
 
@@ -36,8 +36,15 @@ async def upload_games(
     parsed, errors = pgn_service.parse_pgn_text(text)
     usernames = get_settings().usernames
     created = []
+    duplicates = []
     for pg in parsed:
-        game = Game(**pgn_service.game_fields(pg, usernames))
+        fields = pgn_service.game_fields(pg, usernames)
+        existing = find_duplicate(session, fields["fingerprint"], fields["source_url"])
+        if existing:
+            label = f"{existing.white} vs {existing.black}" + (f", {existing.date}" if existing.date else "")
+            duplicates.append(UploadDuplicate(game_index=pg.index, existing_id=existing.id, label=label))
+            continue
+        game = Game(**fields)
         if analyze:
             game.analysis_status = "running"  # queued; progress stays 0 until its turn
         session.add(game)
@@ -50,7 +57,23 @@ async def upload_games(
     return UploadResult(
         created=created,
         errors=[UploadError(game_index=e.index, message=e.message) for e in errors],
+        duplicates=duplicates,
     )
+
+
+def find_duplicate(session: Session, fp: str, url: Optional[str]) -> Optional[Game]:
+    """An already-stored copy of this game, matched by link or by players + date + moves.
+
+    Games with different links are never duplicates, even if their moves are identical.
+    """
+    if url:
+        same_link = session.exec(select(Game).where(Game.source_url == url)).first()
+        if same_link:
+            return same_link
+    for g in session.exec(select(Game).where(Game.fingerprint == fp)):
+        if not (url and g.source_url and g.source_url != url):
+            return g
+    return None
 
 
 def _analyze_all(game_ids: list[int]) -> None:

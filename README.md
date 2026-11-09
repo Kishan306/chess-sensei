@@ -16,6 +16,8 @@ free model running on your own computer. See [PLAN.md](PLAN.md) for the full pla
 
 ## Features
 - Paste or upload PGNs (several games per file). Bad games are rejected with the game and move that failed.
+- Games you've already uploaded are skipped, matched by their Lichess/Chess.com link or by
+  players + date + moves, with a link to the existing review.
 - Background Stockfish analysis with progress, an eval cache, and Lichess-style move classification
   (best, excellent, good, book, inaccuracy, mistake, blunder, missed win).
 - Review page: board with move badges and arrows (red = played, green = best), evaluation bar,

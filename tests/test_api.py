@@ -4,6 +4,12 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 
+def _upload(client, pgn: str) -> int:
+    """Upload a game and return its id (the existing one if it was already uploaded)."""
+    body = client.post("/api/games", data={"pgn": pgn}).json()
+    return body["created"][0] if body["created"] else body["duplicates"][0]["existing_id"]
+
+
 @pytest.fixture(scope="module")
 def client():
     with TestClient(app) as c:
@@ -38,7 +44,7 @@ def test_upload_file(client, fixture_text):
 
 
 def test_set_my_color(client, fixture_text):
-    gid = client.post("/api/games", data={"pgn": fixture_text("opera_game.pgn")}).json()["created"][0]
+    gid = _upload(client, fixture_text("opera_game.pgn"))
     res = client.patch(f"/api/games/{gid}", json={"my_color": "black"})
     assert res.status_code == 200 and res.json()["my_color"] == "black"
     assert client.patch(f"/api/games/{gid}", json={"my_color": "purple"}).status_code == 422
@@ -87,7 +93,7 @@ def test_analysis_end_to_end_with_fake_engine(client, fixture_text, monkeypatch)
     from app.services import engine_service
 
     monkeypatch.setattr(engine_service, "EngineAnalyzer", _FakeAnalyzer)
-    gid = client.post("/api/games", data={"pgn": fixture_text("opera_game.pgn")}).json()["created"][0]
+    gid = _upload(client, fixture_text("opera_game.pgn"))
 
     res = client.post(f"/api/games/{gid}/analyze")  # TestClient runs the background task before returning
     assert res.status_code == 202
@@ -143,7 +149,7 @@ def test_coach_endpoints_with_fakes(client, fixture_text, monkeypatch):
     import app.routes.coach as coach_routes
     monkeypatch.setattr(coach_routes, "EngineAnalyzer", _BlunderAnalyzer)
 
-    gid = client.post("/api/games", data={"pgn": fixture_text("queen_blunder.pgn")}).json()["created"][0]
+    gid = _upload(client, fixture_text("queen_blunder.pgn"))
     client.patch(f"/api/games/{gid}", json={"my_color": "black"})
     assert client.post(f"/api/games/{gid}/coach").status_code == 409  # not analysed yet
 
@@ -176,9 +182,35 @@ def test_tags_in_game_detail_and_new_pages(client, fixture_text, monkeypatch):
     from app.services import engine_service
 
     monkeypatch.setattr(engine_service, "EngineAnalyzer", _BlunderAnalyzer)
-    gid = client.post("/api/games", data={"pgn": fixture_text("queen_blunder.pgn")}).json()["created"][0]
+    gid = _upload(client, fixture_text("queen_blunder.pgn"))
     client.post(f"/api/games/{gid}/analyze")
     qg5 = next(m for m in client.get(f"/api/games/{gid}").json()["moves"] if m["san"] == "Qg5")
     assert "hanging_piece" in qg5["tags"]
     for page in ("/profile", "/puzzles"):
         assert client.get(page).status_code == 200
+
+
+def test_duplicate_upload_is_skipped(client, fixture_text):
+    pgn = fixture_text("scholars_mate.pgn")
+    first = _upload(client, pgn)
+    body = client.post("/api/games", data={"pgn": pgn}).json()
+    assert body["created"] == []
+    assert body["duplicates"][0]["existing_id"] == first
+    assert "vs" in body["duplicates"][0]["label"]
+
+
+def test_duplicate_within_one_upload(client):
+    game = '[White "Dup A"]\n[Black "Dup B"]\n[Date "2026.01.02"]\n\n1. d4 d5 2. c4 *\n\n'
+    body = client.post("/api/games", data={"pgn": game + game}).json()
+    assert len(body["created"]) == 1 and len(body["duplicates"]) == 1
+    assert body["duplicates"][0]["game_index"] == 2
+
+
+def test_same_moves_different_links_are_different_games(client):
+    base = '[White "Same A"]\n[Black "Same B"]\n[Date "2026.01.03"]\n[Site "https://lichess.org/{id}"]\n\n1. e4 e5 *\n'
+    one = client.post("/api/games", data={"pgn": base.format(id="aaaa1111")}).json()
+    two = client.post("/api/games", data={"pgn": base.format(id="bbbb2222")}).json()
+    assert one["created"] and two["created"]
+    # Same link again (even without the other headers matching exactly) is a duplicate
+    again = client.post("/api/games", data={"pgn": base.format(id="AAAA1111").replace("Same A", "same a")}).json()
+    assert again["duplicates"][0]["existing_id"] == one["created"][0]

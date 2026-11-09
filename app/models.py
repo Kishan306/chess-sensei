@@ -23,6 +23,8 @@ class Game(SQLModel, table=True):
     opening_eco: str = ""
     opening_name: str = ""
     my_color: Optional[str] = None  # "white" | "black" | None (unknown)
+    fingerprint: Optional[str] = Field(default=None, index=True)  # players + date + moves
+    source_url: Optional[str] = None  # Lichess / Chess.com game link, if known
     created_at: datetime = Field(default_factory=_now)
     analysis_status: str = "pending"  # pending | running | done | error
     analysis_progress: int = 0

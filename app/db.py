@@ -42,6 +42,23 @@ def get_session():
         yield session
 
 
+def backfill_fingerprints() -> None:
+    """Games uploaded before duplicate detection existed get their fingerprint now."""
+    from sqlmodel import select
+
+    from app.models import Game
+    from app.services import pgn_service
+
+    with Session(engine) as session:
+        for game in session.exec(select(Game).where(Game.fingerprint == None)):  # noqa: E711
+            parsed, _ = pgn_service.parse_pgn_text(game.pgn_raw)
+            if parsed:
+                game.fingerprint = pgn_service.fingerprint(parsed[0].headers, parsed[0].sans)
+                game.source_url = pgn_service.source_url(parsed[0].headers)
+                session.add(game)
+        session.commit()
+
+
 def reset_interrupted_analyses() -> None:
     """Games left 'running' by a previous server process will never finish; mark them failed."""
     from sqlmodel import select

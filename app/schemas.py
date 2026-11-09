@@ -9,9 +9,16 @@ class UploadError(BaseModel):
     message: str
 
 
+class UploadDuplicate(BaseModel):
+    game_index: int
+    existing_id: int
+    label: str  # e.g. "Alice vs Bob, 2026.11.01"
+
+
 class UploadResult(BaseModel):
     created: list[int]
     errors: list[UploadError]
+    duplicates: list[UploadDuplicate] = []
 
 
 class GameListItem(BaseModel):

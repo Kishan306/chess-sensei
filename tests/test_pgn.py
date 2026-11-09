@@ -46,3 +46,17 @@ def test_chess_com_opening_from_eco_url():
     pgn = '[White "a"]\n[Black "b"]\n[ECOUrl "https://www.chess.com/openings/Sicilian-Defense"]\n\n1. e4 c5 *'
     games, _ = parse_pgn_text(pgn)
     assert game_fields(games[0], [])["opening_name"] == "Sicilian Defense"
+
+
+def test_fingerprint_and_source_url():
+    from app.services.pgn_service import fingerprint, source_url
+
+    h = {"White": "A", "Black": "B", "Date": "2026.01.01"}
+    assert fingerprint(h, ["e4", "e5"]) == fingerprint({**h, "White": " a "}, ["e4", "e5"])
+    assert fingerprint(h, ["e4", "e5"]) != fingerprint(h, ["e4", "c5"])
+    assert fingerprint(h, ["e4"]) != fingerprint({**h, "Date": "2026.01.02"}, ["e4"])
+    assert source_url({"Site": "https://lichess.org/AbCd1234/"}) == "https://lichess.org/abcd1234"
+    assert source_url({"Site": "Chess.com", "Link": "https://www.chess.com/game/live/123"}) == \
+        "https://www.chess.com/game/live/123"
+    assert source_url({"Site": "Paris"}) is None
+    assert source_url({"Link": "https://www.chess.com/game/live/123?move=0"}) == "https://www.chess.com/game/live/123"

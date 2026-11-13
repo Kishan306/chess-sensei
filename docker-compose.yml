@@ -1,0 +1,20 @@
+services:
+  chess-sensei:
+    build: .
+    image: chess-sensei
+    container_name: chess-sensei
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"   # only reachable from this computer
+    env_file:
+      - .env                     # LLM keys, engine settings, MY_USERNAMES, ...
+    environment:                 # these win over .env: paths inside the container
+      STOCKFISH_PATH: /usr/games/stockfish
+      DATABASE_URL: sqlite:////data/chess_coach.db
+    volumes:
+      - chess-data:/data         # games, reviews and costs live here
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # lets the app reach Ollama on your computer
+
+volumes:
+  chess-data:

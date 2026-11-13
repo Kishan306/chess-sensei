@@ -59,6 +59,33 @@ Paste or upload a PGN (several games per file is fine). Games whose players matc
 or on the review page. Open a game and click **Get coach review** for explanations
 (needs an LLM, see [Choosing an LLM](#choosing-an-llm)). Everything else works without one.
 
+## Run with Docker
+
+The easiest way to start and stop the app. The image includes Python and Stockfish, so you
+only need Docker.
+
+```bash
+cp .env.example .env        # then edit values (LLM key, MY_USERNAMES, ...)
+docker compose up -d        # build (first time) and start in the background
+# open http://localhost:8000
+
+docker compose stop         # stop (your games and reviews are kept)
+docker compose start        # start again
+docker compose logs -f      # watch the logs
+docker compose down         # remove the container (data is still kept)
+docker compose up -d --build   # after pulling new code
+```
+
+- Games, reviews and costs are stored in a Docker volume (`chess-data`), so they survive
+  rebuilds. `docker compose down -v` deletes them.
+- `STOCKFISH_PATH` and `DATABASE_URL` are set by the compose file; the rest comes from `.env`.
+- The app is only reachable from your own computer (`127.0.0.1:8000`).
+- Using Ollama on your computer? Set `COACH_BASE_URL=http://host.docker.internal:11434/v1`
+  (`localhost` would point inside the container).
+- To bring an existing local database into Docker:
+  `docker compose cp chess_coach.db chess-sensei:/data/chess_coach.db` (with the container
+  created, e.g. after `docker compose up -d --no-start`) and then `docker compose start`.
+
 ## Tests
 
 ```bash

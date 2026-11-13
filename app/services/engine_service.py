@@ -250,7 +250,9 @@ def analyze_game(game_id: int) -> None:
             clear_coaching(session, game_id)
             session.exec(delete(Move).where(Move.game_id == game_id))
             session.add_all(moves)
-            game.coach_status, game.coach_progress, game.coach_error = "none", 0, None
+            if game.coach_status != "queued":  # a queued review still runs after this analysis
+                game.coach_status, game.coach_progress, game.coach_error = "none", 0, None
+            game.coach_mode = None
             game.analysis_status, game.analysis_progress = "done", 100
         except Exception as exc:  # report any failure to the UI
             log.exception("Analysis failed for game %s", game_id)

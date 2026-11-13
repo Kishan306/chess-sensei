@@ -29,7 +29,13 @@ class Game(SQLModel, table=True):
     analysis_status: str = "pending"  # pending | running | done | error
     analysis_progress: int = 0
     analysis_error: Optional[str] = None
-    coach_status: str = "none"  # none | running | done | error
+    coach_status: str = "none"  # none | queued | running | stopping | stopped | done | error
+    coach_mode: Optional[str] = None  # standard | masterclass (of the stored review)
+    # What coaching this game has cost so far (all runs added up)
+    coach_calls: int = 0
+    coach_input_tokens: int = 0
+    coach_output_tokens: int = 0
+    coach_cost_usd: Optional[float] = 0.0  # None once a call had an unknown price
     coach_progress: int = 0
     coach_error: Optional[str] = None
 
@@ -75,6 +81,7 @@ class CoachNote(SQLModel, table=True):
     move_id: int = Field(foreign_key="move.id", index=True)
     explanation: dict = Field(sa_column=Column(JSON))  # structured, see coach_service.CoachExplanation
     model: str
+    mode: str = "standard"  # standard | masterclass
     created_at: datetime = Field(default_factory=_now)
 
 
@@ -84,3 +91,9 @@ class GameSummary(SQLModel, table=True):
     summary: dict = Field(sa_column=Column(JSON))
     model: str = ""
     created_at: datetime = Field(default_factory=_now)
+
+
+class AppSetting(SQLModel, table=True):
+    """Small key/value store for settings changed from the UI (e.g. Masterclass mode)."""
+    key: str = Field(primary_key=True)
+    value: str

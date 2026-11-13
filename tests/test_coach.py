@@ -51,7 +51,7 @@ class FakeLLM:
         self.outputs = list(outputs)
         self.calls = []
 
-    def __call__(self, system, messages, model):
+    def __call__(self, system, messages, model, on_usage=None):
         self.calls.append(messages)
         return self.outputs.pop(0)
 
@@ -78,14 +78,46 @@ def test_good_answer_passes_guard_without_retry():
     assert out["better_move"] == "Nc6"
 
 
-def test_invented_move_triggers_retry_then_accepts_fix():
+def test_invented_move_in_minor_sentence_is_cut_without_second_call():
     game, moves = _queen_blunder_game()
-    bad = GOOD.model_copy(update={"why_better": "2... Nc6 is good, and later Bb4 pins the knight."})
+    bad = GOOD.model_copy(update={"why_better": "2... Nc6 is good. Later Bb4 pins the knight."})
+    llm = FakeLLM(bad)
+    out = C.explain_move(game, moves[3], moves[:3], llm, Settings())
+    assert len(llm.calls) == 1  # no second call
+    assert out["why_better"] == "2... Nc6 is good."
+    assert out["_guard"] == {"retried": False, "removed_moves": ["Bb4"]}
+
+
+def test_invented_move_in_headline_triggers_one_retry():
+    game, moves = _queen_blunder_game()
+    bad = GOOD.model_copy(update={"headline": "Qg5 loses to Bb4 and Nxg5."})
     llm = FakeLLM(bad, GOOD)
     out = C.explain_move(game, moves[3], moves[:3], llm, Settings())
     assert len(llm.calls) == 2
     assert "Bb4" in llm.calls[1][-1]["content"]  # correction names the invented move
     assert out["_guard"]["retried"] and not out["_guard"]["removed_moves"]
+
+
+def test_usage_and_cost_are_recorded():
+    game, moves = _queen_blunder_game()
+
+    class Metered(FakeLLM):
+        def __call__(self, system, messages, model, on_usage=None):
+            on_usage("claude-sonnet-5-5", 6000, 2000)
+            return super().__call__(system, messages, model)
+
+    out = C.explain_move(game, moves[3], moves[:3], Metered(GOOD), Settings())
+    u = out["_usage"]
+    assert (u["calls"], u["input_tokens"], u["output_tokens"]) == (1, 6000, 2000)
+    assert u["cost_usd"] == pytest.approx((6000 * 2 + 2000 * 10) / 1e6)
+
+
+def test_unknown_price_gives_no_cost():
+    from app.services.pricing import cost_usd
+
+    assert cost_usd("qwen2.5:14b", 1000, 1000, Settings()) is None
+    assert cost_usd("qwen2.5:14b", 1_000_000, 0, Settings(coach_price_input_per_m=1, coach_price_output_per_m=2)) == 1
+    assert cost_usd("claude-opus-5-5", 1_000_000, 1_000_000, Settings()) == 24
 
 
 def test_invented_move_removed_if_retry_still_bad():
@@ -132,3 +164,16 @@ def test_summary_and_question():
     assert checked["Nc6"]["as_played"] == "2... Nc6"
     assert checked["Qh5"]["legal"] is False  # not legal for either side here
     assert len(calls) == 1
+
+
+def test_pawn_moves_inside_lines_are_allowed():
+    payload = {"line": "17... Qh5 18. Nh3 e4 19. Be6+ Kb8", "facts": {"text": "the knight on e4"}}
+    assert {"Qh5", "Nh3", "e4", "Be6", "Kb8"} <= C.line_moves(payload)
+    # A square named in plain prose is not a line, so it doesn't allow a pawn move
+    assert "e4" not in C.line_moves({"facts": {"text": "the knight on e4"}})
+
+    class Out(C.BaseModel):
+        text: str
+
+    allowed = C.san_tokens(str(payload)) | C.line_moves(payload)
+    assert C.unknown_moves(Out(text="After 18... e4 Black opens the diagonal."), allowed) == set()

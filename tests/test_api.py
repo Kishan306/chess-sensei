@@ -124,7 +124,7 @@ class _FakeCoach:
     def __init__(self, settings=None):
         pass
 
-    def __call__(self, system, messages, model):
+    def __call__(self, system, messages, model, on_usage=None):
         from app.services import coach_service as C
 
         if model is C.CoachExplanation:
@@ -214,3 +214,200 @@ def test_same_moves_different_links_are_different_games(client):
     # Same link again (even without the other headers matching exactly) is a duplicate
     again = client.post("/api/games", data={"pgn": base.format(id="AAAA1111").replace("Same A", "same a")}).json()
     assert again["duplicates"][0]["existing_id"] == one["created"][0]
+
+
+class _MasterclassCoach(_FakeCoach):
+    calls = 0
+
+    def __call__(self, system, messages, model, on_usage=None):
+        from app.services import coach_service as C
+
+        type(self).calls += 1
+        assert "titled" in system  # Masterclass persona
+        if model is C.MasterclassMistake:
+            base = super().__call__(system, messages, C.CoachExplanation).model_dump()
+            return C.MasterclassMistake(**base, master_insight="A strong player first asks what is undefended.")
+        if model is C.MoveExplanation:
+            return C.MoveExplanation(
+                headline="A natural developing move.", idea="Develops a piece.", why_it_works="Controls the centre.",
+                opponent_options="The opponent can continue developing.", alternatives=[],
+                plan_ahead="Castle and connect the rooks.", master_insight="Tempo matters here.",
+                principle="Develop before attacking.")
+        return super().__call__(system, messages, model)
+
+
+def test_masterclass_explains_every_move(client, fixture_text, monkeypatch):
+    from app.services import coach_service, engine_service
+
+    monkeypatch.setattr(engine_service, "EngineAnalyzer", _BlunderAnalyzer)
+    monkeypatch.setattr(coach_service, "AnthropicCoach", _MasterclassCoach)
+    gid = _upload(client, fixture_text("queen_blunder.pgn"))
+    client.post(f"/api/games/{gid}/analyze")
+
+    assert client.get("/api/settings").json() == {"masterclass": False}
+    est_standard = client.get("/api/coach/estimate", params={"game_id": gid}).json()
+    assert client.put("/api/settings", json={"masterclass": True}).json() == {"masterclass": True}
+    est = client.get("/api/coach/estimate", params={"game_id": gid}).json()
+    # 5 moves, but 1. e4 e5 2. Nf3 are book moves with free notes: 2 explanations + summary
+    assert est["mode"] == "masterclass" and est["calls"] == 2 + 1
+    assert est["calls"] > est_standard["calls"]
+
+    try:
+        assert client.post(f"/api/games/{gid}/coach").status_code == 202
+        game = client.get(f"/api/games/{gid}").json()
+        assert game["coach_status"] == "done" and game["coach_mode"] == "masterclass"
+        notes = game["notes"]
+        assert len(notes) == 5  # every move, both sides
+        kinds = {m["san"]: notes[str(m["id"])]["kind"] for m in game["moves"]}
+        assert kinds == {"e4": "brief", "e5": "brief", "Nf3": "brief", "Qg5": "mistake", "Nxg5": "move"}
+        assert _MasterclassCoach.calls == 3  # 2 explanations + summary, nothing for book moves
+        assert notes[str(game["moves"][3]["id"])]["master_insight"]
+        assert game["summary"]["_mode"] == "masterclass"
+
+        # Nothing left to do afterwards
+        assert client.get("/api/coach/estimate", params={"game_id": gid}).json()["calls"] == 1
+
+        # Good moves can be explained on demand only in Masterclass
+        e4 = game["moves"][0]
+        nxg5 = game["moves"][4]
+        assert client.get(f"/api/moves/{nxg5['id']}/coach").json()["kind"] == "move"
+    finally:
+        client.put("/api/settings", json={"masterclass": False})
+    assert client.get(f"/api/moves/{e4['id']}/coach", params={"refresh": True}).status_code == 400
+
+
+def test_coach_all_queues_and_analyses(client, fixture_text, monkeypatch):
+    from app.services import coach_service, engine_service
+
+    monkeypatch.setattr(engine_service, "EngineAnalyzer", _BlunderAnalyzer)
+    monkeypatch.setattr(coach_service, "AnthropicCoach", _FakeCoach)
+    pgn = '[White "Bulk A"]\n[Black "Bulk B"]\n[Date "2026.02.02"]\n\n1. e4 e5 2. Nf3 Qg5 3. Nxg5 *\n'
+    gid = _upload(client, pgn)
+    assert client.get(f"/api/games/{gid}").json()["analysis_status"] == "pending"
+
+    res = client.post("/api/coach/all", json={"game_ids": [gid]})
+    assert res.status_code == 202 and res.json()["games"] == 1
+    game = client.get(f"/api/games/{gid}").json()
+    assert game["analysis_status"] == "done" and game["coach_status"] == "done"
+
+
+def test_coach_reports_config_error_when_every_call_fails(client, fixture_text, monkeypatch):
+    from app.services import coach_service, engine_service
+
+    class _Broken:
+        def __init__(self, settings=None):
+            pass
+
+        def __call__(self, *a, **kw):
+            raise coach_service.CoachError("The Anthropic API key is missing or invalid.")
+
+    monkeypatch.setattr(engine_service, "EngineAnalyzer", _BlunderAnalyzer)
+    monkeypatch.setattr(coach_service, "AnthropicCoach", _Broken)
+    pgn = '[White "Err A"]\n[Black "Err B"]\n[Date "2026.03.03"]\n\n1. e4 e5 2. Nf3 Qg5 3. Nxg5 *\n'
+    gid = _upload(client, pgn)
+    client.post(f"/api/games/{gid}/analyze")
+    client.post(f"/api/games/{gid}/coach")
+    st = client.get(f"/api/games/{gid}/coach/status").json()
+    assert st["status"] == "error" and "API key" in st["error"]
+
+
+class _MeteredCoach(_MasterclassCoach):
+    """Reports 5000 input / 2000 output Sonnet tokens per call."""
+
+    def __call__(self, system, messages, model, on_usage=None):
+        if on_usage:
+            on_usage("claude-sonnet-5-5", 5000, 2000)
+        return super().__call__(system, messages, model)
+
+
+def test_cost_is_tracked_per_game_and_used_for_estimates(client, fixture_text, monkeypatch):
+    from app.services import coach_service, engine_service
+
+    monkeypatch.setattr(engine_service, "EngineAnalyzer", _BlunderAnalyzer)
+    monkeypatch.setattr(coach_service, "AnthropicCoach", _MeteredCoach)
+    pgn = '[White "Cost A"]\n[Black "Cost B"]\n[Date "2026.04.04"]\n\n1. e4 e5 2. Nf3 Qg5 3. Nxg5 *\n'
+    gid = _upload(client, pgn)
+    client.post(f"/api/games/{gid}/analyze")
+    client.put("/api/settings", json={"masterclass": True})
+    try:
+        before = client.get("/api/coach/estimate", params={"game_id": gid}).json()
+        assert before["calls"] == 3 and before["cost_usd"] is not None
+        client.post(f"/api/games/{gid}/coach")
+        game = client.get(f"/api/games/{gid}").json()
+        per_call = (5000 * 2 + 2000 * 10) / 1e6
+        assert game["coach_calls"] == 3
+        assert game["coach_cost_usd"] == pytest.approx(3 * per_call)
+        # The next estimate is based on what calls actually cost
+        other = _upload(client, pgn.replace("Cost A", "Cost C"))
+        client.post(f"/api/games/{other}/analyze")
+        est = client.get("/api/coach/estimate", params={"game_id": other}).json()
+        assert est["cost_basis"] == "your past reviews"
+        assert est["cost_usd"] == pytest.approx(round(est["calls"] * per_call, 2))
+    finally:
+        client.put("/api/settings", json={"masterclass": False})
+
+
+def test_stop_running_review_keeps_finished_notes(client, fixture_text, monkeypatch):
+    from sqlmodel import Session
+
+    from app.config import get_settings
+    from app.db import engine as db_engine
+    from app.models import Game
+    from app.services import coach_service, engine_service
+
+    monkeypatch.setattr(engine_service, "EngineAnalyzer", _FakeAnalyzer)
+    monkeypatch.setattr(get_settings(), "coach_concurrency", 1)
+    gid = _upload(client, fixture_text("opera_game.pgn"))
+    client.post(f"/api/games/{gid}/analyze")
+
+    class StopAfterTwo(_MasterclassCoach):
+        n = 0
+
+        def __call__(self, system, messages, model, on_usage=None):
+            import time
+
+            time.sleep(0.2)  # real calls take seconds; lets the job notice Stop in time
+            type(self).n += 1
+            if type(self).n == 2:  # the user clicks Stop while the review is running
+                with Session(db_engine) as s:
+                    g = s.get(Game, gid)
+                    g.coach_status = "stopping"
+                    s.add(g)
+                    s.commit()
+            return super().__call__(system, messages, model)
+
+    monkeypatch.setattr(coach_service, "AnthropicCoach", StopAfterTwo)
+    client.put("/api/settings", json={"masterclass": True})
+    try:
+        client.post(f"/api/games/{gid}/coach")
+    finally:
+        client.put("/api/settings", json={"masterclass": False})
+    game = client.get(f"/api/games/{gid}").json()
+    assert game["coach_status"] == "stopped" and "Stopped" in game["coach_error"]
+    llm_notes = [n for n in game["notes"].values() if n["kind"] != "brief"]
+    # The finished calls are kept. At most one more call was already under way when Stop
+    # was seen; nothing after that was started.
+    assert StopAfterTwo.n in (2, 3) and len(llm_notes) == StopAfterTwo.n
+    assert game["summary"] is None
+
+
+def test_stop_queued_game_is_skipped(client, fixture_text, monkeypatch):
+    from sqlmodel import Session
+
+    from app.db import engine as db_engine
+    from app.models import Game
+    from app.services import coach_service
+
+    gid = _upload(client, fixture_text("queen_blunder.pgn"))
+    with Session(db_engine) as s:
+        g = s.get(Game, gid)
+        g.coach_status = "queued"
+        s.add(g)
+        s.commit()
+    assert client.post(f"/api/games/{gid}/coach/stop").json()["status"] == "stopped"
+
+    called = []
+    monkeypatch.setattr(coach_service, "coach_game", lambda *a, **k: called.append(a))
+    coach_service.coach_all([gid], "masterclass")
+    assert called == []
+    assert client.post("/api/coach/stop").json() == {"stopped": 0}

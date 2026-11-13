@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -16,6 +17,16 @@ class Settings(BaseSettings):
     coach_effort: str = "medium"  # Claude only: low | medium | high | xhigh | max
     coach_fallbacks: bool = True  # Claude only: fallback model if a request is declined
     coach_only_my_moves: bool = True  # when the colour is known, only coach the student's mistakes
+    coach_concurrency: int = 4  # LLM calls run in parallel when reviewing a game
+
+    # Masterclass mode: every move explained by a titled-player-level coach
+    masterclass_model: str = ""  # empty = same as COACH_MODEL
+    masterclass_effort: str = "medium"  # Claude only
+
+    # Prices for cost tracking, USD per million tokens. Claude prices are built in; set these
+    # for other providers (leave empty for free/local models).
+    coach_price_input_per_m: Optional[float] = None
+    coach_price_output_per_m: Optional[float] = None
 
     stockfish_path: str = "/usr/games/stockfish"
     engine_depth: int = 18

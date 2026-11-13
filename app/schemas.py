@@ -34,6 +34,11 @@ class GameListItem(BaseModel):
     my_color: Optional[str]
     analysis_status: str
     analysis_progress: int
+    coach_status: str = "none"
+    coach_progress: int = 0
+    coach_mode: Optional[str] = None
+    coach_calls: int = 0
+    coach_cost_usd: Optional[float] = 0.0
     created_at: datetime
 
 
@@ -67,8 +72,6 @@ class GameDetail(GameListItem):
     time_control: str
     pgn_raw: str
     analysis_error: Optional[str]
-    coach_status: str
-    coach_progress: int
     coach_error: Optional[str]
     moves: list[MoveOut]
     notes: dict[int, dict] = {}
@@ -92,3 +95,23 @@ class AskRequest(BaseModel):
 class AskResponse(BaseModel):
     answer: str
     checked_moves: list[dict]
+
+
+class SettingsOut(BaseModel):
+    masterclass: bool
+
+
+class SettingsUpdate(BaseModel):
+    masterclass: bool
+
+
+class CoachAllRequest(BaseModel):
+    game_ids: Optional[list[int]] = None  # None = every game
+
+
+class EstimateOut(BaseModel):
+    mode: str
+    games: int
+    calls: int
+    cost_usd: Optional[float] = None  # None when the model's price is unknown
+    cost_basis: str = ""  # "your past reviews" | "a rough guess" | "unknown price"

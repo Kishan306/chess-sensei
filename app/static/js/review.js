@@ -3,6 +3,8 @@ import { Arrows, ARROW_TYPE } from "https://cdn.jsdelivr.net/npm/cm-chessboard@8
 import { Chess } from "https://cdn.jsdelivr.net/npm/chess.js@1.0.0/dist/esm/chess.js";
 import { el, playerPicker } from "./players.js";
 import { BADGE_STYLE, MoveBadge, badgeIcon } from "./badges.js";
+import { isMasterclass, onMasterclassChange, ready } from "./nav.js";
+import { confirmReview, isBusy, spentLabel, stopReview } from "./coach-ui.js";
 
 const ASSETS = "https://cdn.jsdelivr.net/npm/cm-chessboard@8.7.8/assets/";
 const ARROW_PLAYED = ARROW_TYPE.danger; // red
@@ -104,42 +106,65 @@ function plyForLabel(label) {
   return m ? m.ply : null;
 }
 
+const coachBusy = () => isBusy(game.coach_status);
+
+async function startReview(refresh) {
+  const mc = isMasterclass();
+  if (!game.my_color && !mc && !refresh &&
+      !confirm("You haven't said which player you are, so the coach will explain both sides' mistakes. Continue?")) return;
+  if (!(await confirmReview(Number(gameId), { refresh, movesInGame: game.moves.length }))) return;
+  const res = await fetch(`/api/games/${gameId}/coach${refresh ? "?refresh=true" : ""}`, { method: "POST" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    alert(body.detail || "Couldn't start the coach review.");
+    return;
+  }
+  game.coach_status = "running";
+  game.coach_progress = 0;
+  renderCoachReview();
+  pollCoach();
+}
+
 function renderCoachReview() {
   const box = document.getElementById("coach-review");
   const s = game.summary;
+  const mc = isMasterclass();
 
-  if (game.coach_status === "running") {
+  const spent = spentLabel(game);
+  const costLine = spent ? el("p", { class: "muted cost-line" }, `Spent on this game so far: ${spent}`) : "";
+
+  if (coachBusy()) {
+    const text = {
+      queued: "Queued — waiting for other games to finish.",
+      stopping: "Stopping… finishing the explanations already under way.",
+    }[game.coach_status] || `Your coach is reviewing the game… ${game.coach_progress}%`;
     box.replaceChildren(
-      el("p", {}, `Your coach is reviewing the game… ${game.coach_progress}%`),
+      el("p", {}, text),
       el("div", { class: "progress" }, el("div", { style: `width:${game.coach_progress}%` })),
-      el("p", { class: "muted" }, "This takes a few seconds per mistake."));
+      el("p", { class: "muted" }, "Explanations appear on the moves as they're ready."),
+      costLine,
+      el("div", { class: "row" }, el("button", {
+        disabled: game.coach_status === "stopping" ? "" : null,
+        onclick: async () => { await stopReview(gameId); pollCoach(); },
+      }, game.coach_status === "stopping" ? "Stopping…" : "Stop")));
     return;
   }
 
-  const startButton = (label, refresh = false) => el("button", {
-    class: refresh ? "" : "primary",
-    onclick: async () => {
-      if (!game.my_color && !refresh &&
-          !confirm("You haven't said which player you are, so the coach will explain both sides' mistakes. Continue?")) return;
-      const res = await fetch(`/api/games/${gameId}/coach${refresh ? "?refresh=true" : ""}`, { method: "POST" });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        alert(body.detail || "Couldn't start the coach review.");
-        return;
-      }
-      game.coach_status = "running";
-      game.coach_progress = 0;
-      renderCoachReview();
-      pollCoach();
-    },
-  }, label);
+  const button = (label, refresh, primary) =>
+    el("button", { class: primary ? "primary" : "", onclick: () => startReview(refresh) }, label);
 
   if (!s) {
     const parts = [
-      el("p", {}, "Get a coach's explanation of every mistake plus a summary of the game."),
-      startButton("Get coach review"),
+      el("p", {}, mc
+        ? "Masterclass: every move — yours and your opponent's — explained in depth, plus a summary of the game."
+        : "Get a coach's explanation of every mistake plus a summary of the game."),
+      button(game.coach_status === "stopped"
+        ? (mc ? "Continue Masterclass review" : "Continue coach review")
+        : (mc ? "Get Masterclass review" : "Get coach review"), false, true),
+      costLine,
     ];
     if (game.coach_status === "error") parts.unshift(el("p", { class: "error" }, game.coach_error || "Coach review failed."));
+    if (game.coach_status === "stopped") parts.unshift(el("p", { class: "muted" }, game.coach_error || "Stopped."));
     box.replaceChildren(...parts);
     return;
   }
@@ -150,7 +175,12 @@ function renderCoachReview() {
       target ? el("button", { class: "link", onclick: () => goTo(target) }, tp.move) : el("strong", {}, tp.move),
       " — ", tp.description);
   }));
+  const isMcReview = game.coach_mode === "masterclass";
+  const buttons = [];
+  if (mc && !isMcReview) buttons.push(button("Upgrade to Masterclass review", false, true));
+  buttons.push(button("Regenerate review", true, false));
   box.replaceChildren(
+    isMcReview ? el("p", {}, el("span", { class: "mc-badge" }, "Masterclass review")) : "",
     el("div", { class: "review-grid" },
       el("div", {}, el("h3", {}, "Turning points"), turning),
       el("div", {},
@@ -159,7 +189,8 @@ function renderCoachReview() {
         el("h3", {}, "Main weakness"), el("p", {}, s.main_weakness))),
     el("div", { class: "practice" }, el("strong", {}, "Practise next: "), s.practice_next),
     game.coach_error ? el("p", { class: "muted" }, game.coach_error) : "",
-    el("div", { class: "row" }, startButton("Regenerate review", true)));
+    costLine,
+    el("div", { class: "row" }, ...buttons));
 }
 
 async function pollCoach() {
@@ -167,14 +198,21 @@ async function pollCoach() {
   game.coach_status = st.status;
   game.coach_progress = st.progress;
   game.coach_error = st.error;
-  if (st.status === "running") {
-    renderCoachReview();
-    setTimeout(pollCoach, 2000);
-    return;
-  }
   const fresh = await (await fetch(`/api/games/${gameId}`)).json();
+  const current = ply > 0 ? game.moves[ply - 1].id : null;
+  const hadNote = current && game.notes?.[current];
   game.notes = fresh.notes;
   game.summary = fresh.summary;
+  game.coach_mode = fresh.coach_mode;
+  game.coach_calls = fresh.coach_calls;
+  game.coach_cost_usd = fresh.coach_cost_usd;
+  if (coachBusy()) {
+    renderCoachReview();
+    // Show the current move's explanation as soon as it arrives (but don't wipe a question being typed)
+    if (current && !hadNote && game.notes?.[current] && !document.activeElement?.matches("textarea")) renderMoveInfo();
+    setTimeout(pollCoach, 3000);
+    return;
+  }
   renderCoachReview();
   renderMoveInfo();
 }
@@ -233,30 +271,60 @@ function lineButton(label, fen, sans, kind) {
   return el("button", { class: "show-line", onclick: () => startLine(label, fen, sans, kind) }, `▶ ${label}`);
 }
 
+const section = (title, text, ...extra) => (text ? el("div", {}, el("h4", {}, title), el("p", {}, text), ...extra) : "");
+
+function alternativesList(note) {
+  if (!note.alternatives?.length) return "";
+  return el("div", {}, el("h4", {}, "Other options"),
+    el("ul", {}, ...note.alternatives.map((a) => el("li", {}, el("strong", {}, a.move), " — ", a.comment))));
+}
+
+function insight(note) {
+  return note.master_insight ? el("div", { class: "insight" }, el("strong", {}, "Coach's insight: "), note.master_insight) : "";
+}
+
 function coachSection(m) {
   const note = game.notes?.[m.id];
+  const flagged = FLAGGED.includes(m.classification);
   if (!note) {
     if (loadingNotes.has(m.id)) {
       return el("div", { class: "coach" }, el("p", { class: "muted" }, "Your coach is thinking… (about 10–30 seconds)"));
     }
     return el("div", { class: "coach" },
-      el("p", { class: "plain" }, plainSummary(m)),
+      flagged ? el("p", { class: "plain" }, plainSummary(m)) : "",
       el("button", { class: "primary", onclick: () => explainMove(m) }, "Explain this move"));
   }
+  if (note.kind === "brief") {
+    return el("div", { class: "coach brief" }, el("p", { class: "coach-headline" }, note.headline), el("p", {}, note.text));
+  }
+  const principle = note.principle ? el("div", { class: "principle" }, el("strong", {}, "Remember: "), note.principle) : "";
+
+  if (note.kind === "move") {
+    return el("div", { class: "coach" },
+      el("p", { class: "coach-headline" }, note.headline),
+      section("The idea", note.idea),
+      section("Why it works", note.why_it_works, lineButton("Show the engine line", m.fen_before, m.pv_best, "best")),
+      section("What the opponent can do now", note.opponent_options,
+        lineButton("Show their best reply", m.fen_after, m.pv_played, "danger")),
+      alternativesList(note),
+      section("What to aim for next", note.plan_ahead),
+      insight(note),
+      principle);
+  }
+
   const refutation = lineButton("Show the punishment", m.fen_after, m.pv_played, "danger");
   const best = lineButton("Show the better line", m.fen_before, m.pv_best, "best");
   return el("div", { class: "coach" },
     el("p", { class: "coach-headline" }, note.headline),
-    note.likely_intention ? el("div", {}, el("h4", {}, "What you were going for"), el("p", {}, note.likely_intention)) : "",
-    note.why_it_fails ? el("div", {}, el("h4", {}, "Why it doesn't work"), el("p", {}, note.why_it_fails)) : "",
-    note.opponent_punishment ? el("div", {}, el("h4", {}, "What the opponent can do now"), el("p", {}, note.opponent_punishment), refutation) : refutation,
+    section("What you were going for", note.likely_intention),
+    section("Why it doesn't work", note.why_it_fails),
+    note.opponent_punishment ? section("What the opponent can do now", note.opponent_punishment, refutation) : refutation,
     el("div", {},
       el("h4", {}, `Better was ${note.better_move || m.best_move_san}`),
       note.why_better ? el("p", {}, note.why_better) : "", best),
-    note.alternatives?.length ? el("div", {}, el("h4", {}, "Other options"),
-      el("ul", {}, ...note.alternatives.map((a) => el("li", {}, el("strong", {}, a.move), " — ", a.comment)))) : "",
-    note.principle ? el("div", { class: "principle" }, el("strong", {}, "Remember: "), note.principle) : "",
-  );
+    alternativesList(note),
+    insight(note),
+    principle);
 }
 
 async function explainMove(m) {
@@ -267,6 +335,12 @@ async function explainMove(m) {
     const body = await res.json();
     if (!res.ok) throw new Error(body.detail || "The coach couldn't explain this move.");
     game.notes = { ...(game.notes || {}), [m.id]: body };
+    const u = body._usage;
+    if (u && u.calls) {
+      game.coach_calls = (game.coach_calls || 0) + u.calls;
+      game.coach_cost_usd = game.coach_cost_usd === null || u.cost_usd === null ? null : (game.coach_cost_usd || 0) + u.cost_usd;
+      renderCoachReview();
+    }
   } catch (err) {
     alert(err.message);
   } finally {
@@ -352,7 +426,7 @@ function renderMoveInfo() {
   box.replaceChildren(
     el("div", { class: "headline" }, moveLabel(m), " ", el("span", { class: `c-${cls}` }, `— ${LABELS[cls] || cls}`)),
     FLAGGED.includes(cls) ? tagRow(m) : "",
-    FLAGGED.includes(cls) ? coachSection(m) : "",
+    FLAGGED.includes(cls) || isMasterclass() || game.notes?.[m.id] ? coachSection(m) : "",
     engineDetails(m),
     askSection(m));
   if (box.dataset.lastPly === String(ply)) box.scrollTop = scroll; // re-render of same move keeps scroll
@@ -642,7 +716,13 @@ async function init() {
   renderNav();
   bindKeys();
   goTo(0);
-  if (game.coach_status === "running") pollCoach();
+  if (coachBusy()) pollCoach();
 }
 
-init();
+onMasterclassChange(() => {
+  if (!game?.moves?.length) return;
+  renderCoachReview();
+  renderMoveInfo();
+});
+
+ready.then(init);

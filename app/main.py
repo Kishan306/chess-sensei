@@ -22,6 +22,18 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Chess Sensei", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def revalidate_pages(request, call_next):
+    """Pages and scripts are checked for changes on every load, so a rebuild or update shows up
+    immediately instead of the browser reusing an old copy for hours."""
+    response = await call_next(request)
+    if not request.url.path.startswith("/api"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 app.include_router(games.router)
 app.include_router(analysis.router)
 app.include_router(coach.router)

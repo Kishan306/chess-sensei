@@ -428,3 +428,9 @@ def test_saved_usernames_set_my_colour_on_upload(client):
     client.post("/api/games", data={"pgn": other})
     newest = max(client.get("/api/games").json(), key=lambda g: g["id"])
     assert newest["my_color"] is None
+
+
+def test_pages_and_scripts_are_revalidated(client):
+    assert client.get("/static/js/home.js").headers["cache-control"] == "no-cache"
+    assert client.get("/").headers["cache-control"] == "no-cache"
+    assert "cache-control" not in client.get("/api/games").headers

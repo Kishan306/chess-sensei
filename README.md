@@ -29,6 +29,9 @@ free model running on your own computer. See [PLAN.md](PLAN.md) for the full pla
 - Game review: turning points, how the game was decided, a strength, the main weakness and one
   thing to practise.
 - Follow-up questions about any position; moves you mention are checked by Stockfish first.
+- **Masterclass mode** (switch in the top bar): every move of the game — yours and your
+  opponent's — explained in depth by a coach who thinks like a titled player (candidate moves,
+  plans, structure, prophylaxis), plus "Masterclass review all games" for many games at once.
 - Weakness tags on every mistake (hanging piece, allowed fork, missed mate, ignored threat, …),
   worked out from verified facts, so they work without an LLM.
 
@@ -119,11 +122,42 @@ re-analysing is fast; raising `ENGINE_DEPTH`/`ENGINE_TIME` makes positions get s
 | `COACH_BASE_URL` | – | Server URL for provider `openai`. Empty means OpenAI itself. |
 | `COACH_EFFORT` | `medium` | Claude only. How hard the model thinks: `low` … `max`. Higher can be more careful but is slower and costs more. |
 | `COACH_FALLBACKS` | `true` | Claude only. If a request is declined, it is re-run on a fallback model automatically. |
-| `COACH_ONLY_MY_MOVES` | `true` | When your colour is known, only your mistakes are explained (fewer calls). `false` also explains the opponent's. |
+| `COACH_ONLY_MY_MOVES` | `true` | When your colour is known, only your mistakes are explained (fewer calls). `false` also explains the opponent's. Masterclass ignores this and explains every move. |
+| `COACH_CONCURRENCY` | `4` | How many LLM calls run at the same time while reviewing a game. Higher is faster but can hit the provider's rate limits. |
+| `MASTERCLASS_MODEL` | – | Model for Masterclass mode. Empty = same as `COACH_MODEL`. Set a stronger model here if you like. |
+| `MASTERCLASS_EFFORT` | `medium` | Claude only. Effort level for Masterclass explanations. `high` is deeper but costs noticeably more (thinking is billed as output). |
+| `COACH_PRICE_INPUT_PER_M`, `COACH_PRICE_OUTPUT_PER_M` | – | USD per million tokens, for cost tracking with non-Claude providers. Claude prices are built in. Leave empty for free/local models. |
 
 Cost: one call per mistake plus one for the game summary (sometimes one extra call
 if the coach mentions a move that isn't in the engine data and has to rewrite). Notes are
 saved, so opening a game again costs nothing; "Regenerate review" asks again.
+
+### Masterclass mode
+
+Turn it on with the **Masterclass** switch in the top bar (the choice is saved). Then:
+- Each game has a **Masterclass** button (in the games list and on its review page), and the
+  home page has **Masterclass review all games**. Unanalysed games are analysed first.
+- Every move, both sides, is explained. Mistakes get the usual explanation plus a "Coach's
+  insight"; good moves get the idea, why it works, what the opponent can do now, what to aim
+  for next, and the deeper point.
+- Trivial moves cost nothing: book moves, forced moves and obvious recaptures get a short
+  note without an LLM call.
+- Games already reviewed in normal mode show **Upgrade to Masterclass review**.
+- Follow-up questions are answered in the same titled-coach voice.
+
+### Cost control
+- **Before starting**, you see the number of LLM calls and a dollar estimate (based on what
+  your past reviews actually cost, or a rough guess at first).
+- **While running**, every review has a **Stop** button (and the home page has **Stop all
+  reviews**). Explanations already made are kept; starting again continues where it stopped.
+- **Afterwards**, each game shows what its coaching cost (dollars and calls), and the home page
+  shows the total. Claude prices are built in; for other providers set `COACH_PRICE_*`.
+- Explanations are saved, so you pay once per move. "Regenerate review" redoes everything.
+- The coach is told to describe plans in words, and a sentence naming an unverified move is
+  simply cut. A second call is made only when the headline itself is affected.
+
+A Masterclass review is about one call per non-trivial move. With `COACH_CONCURRENCY` calls
+in parallel, a game takes a few minutes.
 
 ### Choosing an LLM
 

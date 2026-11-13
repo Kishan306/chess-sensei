@@ -411,3 +411,20 @@ def test_stop_queued_game_is_skipped(client, fixture_text, monkeypatch):
     coach_service.coach_all([gid], "masterclass")
     assert called == []
     assert client.post("/api/coach/stop").json() == {"stopped": 0}
+
+
+def test_saved_usernames_set_my_colour_on_upload(client):
+    PGN = '[White "Someone"]\n[Black "Other"]\n[Date "2024.02.02"]\n[Result "1-0"]\n\n1. e4 e5 1-0\n'
+    assert client.get("/api/usernames").json()["usernames"] == []
+    r = client.put("/api/usernames", json={"usernames": [" someone ", "SOMEONE", ""]})
+    assert r.json()["usernames"] == ["someone"]  # trimmed, de-duplicated
+    assert "player123" in r.json()["from_env"]  # .env names are still used
+    client.post("/api/games", data={"pgn": PGN})
+    game = client.get("/api/games").json()[0]
+    assert game["my_color"] == "white"
+
+    client.put("/api/usernames", json={"usernames": []})  # removed again: later uploads are neutral
+    other = PGN.replace("2024.02.02", "2024.02.03")
+    client.post("/api/games", data={"pgn": other})
+    newest = max(client.get("/api/games").json(), key=lambda g: g["id"])
+    assert newest["my_color"] is None

@@ -115,3 +115,12 @@ class EstimateOut(BaseModel):
     calls: int
     cost_usd: Optional[float] = None  # None when the model's price is unknown
     cost_basis: str = ""  # "your past reviews" | "a rough guess" | "unknown price"
+
+
+class UsernamesOut(BaseModel):
+    usernames: list[str]  # saved from the UI
+    from_env: list[str]  # from MY_USERNAMES in .env (read-only here)
+
+
+class UsernamesUpdate(BaseModel):
+    usernames: list[str]

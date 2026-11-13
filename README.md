@@ -55,7 +55,7 @@ uvicorn app.main:app --reload
 ```
 
 Paste or upload a PGN (several games per file is fine). Games whose players match
-`MY_USERNAMES` get your colour set automatically; otherwise click your name in the games table
+your usernames get your colour set automatically (add them in the **Your usernames** box on the home page, or in `MY_USERNAMES`); otherwise click your name in the games table
 or on the review page. Open a game and click **Get coach review** for explanations
 (needs an LLM, see [Choosing an LLM](#choosing-an-llm)). Everything else works without one.
 
@@ -227,7 +227,7 @@ support schemas.
 
 | Variable | Default | How it works |
 |---|---|---|
-| `MY_USERNAMES` | – | Your usernames, comma-separated (e.g. `me_lichess,me_chesscom`). Matched case-insensitively against the PGN's White/Black names to set your colour; otherwise pick it in the UI. |
+| `MY_USERNAMES` | – | Your usernames, comma-separated (e.g. `me_lichess,me_chesscom`). Matched case-insensitively against the PGN's White/Black names to set your colour; otherwise pick it in the UI. Names added in the UI (home page) are used in addition to these. |
 | `PLAYER_RATING` | `1200` | Your approximate rating. The coach pitches its explanations at this level. |
 
 ### App

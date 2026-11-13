@@ -7,7 +7,7 @@ from app.config import get_settings
 from app.db import get_session
 from app.models import CoachNote, Game, GameSummary, Move
 from app.schemas import GameDetail, GameListItem, GameUpdate, UploadDuplicate, UploadError, UploadResult
-from app.services import pgn_service
+from app.services import app_settings, pgn_service
 from app.services.engine_service import analyze_game, clear_coaching, ensure_tags, moves_for_game
 
 router = APIRouter(prefix="/api/games", tags=["games"])
@@ -34,7 +34,7 @@ async def upload_games(
     text = "\n\n".join(parts)
 
     parsed, errors = pgn_service.parse_pgn_text(text)
-    usernames = get_settings().usernames
+    usernames = app_settings.all_usernames(session, get_settings().usernames)
     created = []
     duplicates = []
     for pg in parsed:

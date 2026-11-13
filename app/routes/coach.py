@@ -5,7 +5,7 @@ from app.config import get_settings
 from app.db import get_session
 from app.models import CoachNote, Game, Move
 from app.schemas import (AskRequest, AskResponse, CoachAllRequest, EstimateOut, SettingsOut,
-                         SettingsUpdate, StatusOut)
+                         SettingsUpdate, StatusOut, UsernamesOut, UsernamesUpdate)
 from app.services import app_settings, classify, coach_service
 from app.services.engine_service import EngineAnalyzer, moves_for_game
 
@@ -45,6 +45,19 @@ def read_settings(session: Session = Depends(get_session)):
 def update_settings(body: SettingsUpdate, session: Session = Depends(get_session)):
     app_settings.set_bool(session, app_settings.MASTERCLASS, body.masterclass)
     return SettingsOut(masterclass=body.masterclass)
+
+
+@router.get("/usernames", response_model=UsernamesOut)
+def read_usernames(session: Session = Depends(get_session)):
+    return UsernamesOut(usernames=app_settings.get_usernames(session), from_env=get_settings().usernames)
+
+
+@router.put("/usernames", response_model=UsernamesOut)
+def update_usernames(body: UsernamesUpdate, session: Session = Depends(get_session)):
+    if len(body.usernames) > 20 or any(len(n) > 64 for n in body.usernames):
+        raise HTTPException(400, "Too many usernames, or a name is too long.")
+    saved = app_settings.set_usernames(session, body.usernames)
+    return UsernamesOut(usernames=saved, from_env=get_settings().usernames)
 
 
 # ---------- reviews ----------

@@ -23,6 +23,17 @@
     </section>
 
     <section class="card">
+      <h2>Your usernames</h2>
+      <p class="muted">When an uploaded game has a player with one of these names, that player is marked as you.
+        For other people's games, pick a player yourself or leave it neutral.</p>
+      <div id="usernames"></div>
+      <form id="username-form" class="row">
+        <input type="text" name="username" placeholder="Your Lichess / Chess.com name" maxlength="64" autocomplete="off">
+        <button type="submit">Add</button>
+      </form>
+    </section>
+
+    <section class="card">
       <h2>Your games</h2>
       <div class="bulk" id="bulk"></div>
       <table class="games">

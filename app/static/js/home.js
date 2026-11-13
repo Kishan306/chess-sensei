@@ -2,6 +2,43 @@ import { el, playerPicker } from "./players.js";
 import { isMasterclass, onMasterclassChange, ready } from "./nav.js";
 import { confirmReview, isBusy, spentLabel, stopReview } from "./coach-ui.js";
 
+const usernameBox = document.getElementById("usernames");
+const usernameForm = document.getElementById("username-form");
+let usernames = { usernames: [], from_env: [] };
+
+function renderUsernames() {
+  const chip = (name, onRemove) => el("span", { class: "chip" }, name,
+    onRemove ? el("button", { type: "button", class: "chip-x", title: `Remove ${name}`, onclick: onRemove }, "×") : "");
+  const saved = usernames.usernames.map((n) => chip(n, () => saveUsernames(usernames.usernames.filter((x) => x !== n))));
+  const fromEnv = usernames.from_env.map((n) => el("span", { class: "chip fixed", title: "Set in .env (MY_USERNAMES)" }, n));
+  usernameBox.replaceChildren(...(saved.length || fromEnv.length ? [...saved, ...fromEnv]
+    : [el("span", { class: "muted" }, "None yet.")]));
+}
+
+async function saveUsernames(list) {
+  const res = await fetch("/api/usernames", {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ usernames: list }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    alert(body.detail || "Couldn't save your usernames.");
+    return;
+  }
+  usernames = await res.json();
+  renderUsernames();
+}
+
+usernameForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const input = usernameForm.elements.username;
+  const name = input.value.trim();
+  if (!name) return;
+  await saveUsernames([...usernames.usernames, name]);
+  input.value = "";
+});
+
+fetch("/api/usernames").then((r) => r.json()).then((u) => { usernames = u; renderUsernames(); }).catch(renderUsernames);
+
 const form = document.getElementById("upload-form");
 const resultBox = document.getElementById("upload-result");
 const tbody = document.getElementById("games");

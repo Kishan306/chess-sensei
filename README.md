@@ -39,7 +39,7 @@ free model running on your own computer. See [PLAN.md](PLAN.md) for the full pla
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # app + test tools
 cp .env.example .env   # then edit values
 ```
 

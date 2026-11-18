@@ -3,7 +3,7 @@ from sqlmodel import Session, col, select
 
 from app.config import get_settings
 from app.db import get_session
-from app.models import CoachNote, Game, Move
+from app.models import BUSY, CoachNote, Game, Move
 from app.schemas import (AskRequest, AskResponse, CoachAllRequest, EstimateOut, SettingsOut,
                          SettingsUpdate, StatusOut, UsernamesOut, UsernamesUpdate)
 from app.services import app_settings, classify, coach_service
@@ -71,7 +71,7 @@ def coach_game(game_id: int, background: BackgroundTasks, refresh: bool = False,
     """
     game = _analysed_game(session, game_id)
     mode = app_settings.coach_mode(session)
-    if game.coach_status not in ("running", "queued", "stopping"):
+    if game.coach_status not in BUSY:
         game.coach_status, game.coach_progress, game.coach_error = "running", 0, None
         session.add(game)
         session.commit()
@@ -85,7 +85,7 @@ def coach_all(body: CoachAllRequest, background: BackgroundTasks, session: Sessi
     mode = app_settings.coach_mode(session)
     estimate = _estimate(session, body.game_ids, mode)
     games = _games(session, body.game_ids)
-    queued = [g.id for g in games if g.coach_status not in ("running", "queued", "stopping")]
+    queued = [g.id for g in games if g.coach_status not in BUSY]
     for g in games:
         if g.id in queued:
             g.coach_status, g.coach_progress, g.coach_error = "queued", 0, None

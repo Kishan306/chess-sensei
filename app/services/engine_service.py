@@ -266,6 +266,8 @@ def analyze_game(game_id: int) -> None:
             log.exception("Analysis failed for game %s", game_id)
             session.rollback()
             game = session.get(Game, game_id)
+            if not game:
+                return
             game.analysis_status, game.analysis_error = "error", str(exc) or exc.__class__.__name__
         session.add(game)
         session.commit()

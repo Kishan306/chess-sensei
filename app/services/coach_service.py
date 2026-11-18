@@ -855,6 +855,8 @@ def coach_game(game_id: int, refresh: bool = False, llm: Optional[LLMFn] = None,
             usage = getattr(exc, "usage", None)
             session.rollback()
             game = session.get(Game, game_id)
+            if not game:
+                return
             game.coach_status = "error"
             game.coach_error = str(exc) or exc.__class__.__name__
             add_usage(game, usage)

@@ -9,6 +9,9 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+BUSY = ("running", "queued", "stopping")  # coach_status values while a review job owns the game
+
+
 class Game(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     pgn_raw: str

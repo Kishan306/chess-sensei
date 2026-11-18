@@ -5,7 +5,7 @@ from sqlmodel import Session, delete, select
 
 from app.config import get_settings
 from app.db import get_session
-from app.models import CoachNote, Game, GameSummary, Move
+from app.models import BUSY, CoachNote, Game, GameSummary, Move
 from app.schemas import GameDetail, GameListItem, GameUpdate, UploadDuplicate, UploadError, UploadResult
 from app.services import app_settings, pgn_service
 from app.services.engine_service import analyze_game, clear_coaching, ensure_tags, moves_for_game
@@ -135,6 +135,8 @@ def update_game(game_id: int, body: GameUpdate, session: Session = Depends(get_s
 @router.delete("/{game_id}", status_code=204)
 def delete_game(game_id: int, session: Session = Depends(get_session)):
     game = _get_game(session, game_id)
+    if game.analysis_status == "running" or game.coach_status in BUSY:
+        raise HTTPException(409, "This game is being analysed or reviewed. Stop it or wait, then delete.")
     clear_coaching(session, game_id)
     session.exec(delete(Move).where(Move.game_id == game_id))
     session.delete(game)

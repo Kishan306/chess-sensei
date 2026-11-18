@@ -77,7 +77,8 @@ form.addEventListener("submit", async (e) => {
 });
 
 async function analyze(id) {
-  await fetch(`/api/games/${id}/analyze`, { method: "POST" });
+  const res = await fetch(`/api/games/${id}/analyze`, { method: "POST" });
+  if (!res.ok) alert((await res.json()).detail || "Couldn't start the analysis.");
   loadGames();
 }
 

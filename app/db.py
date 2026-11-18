@@ -63,14 +63,14 @@ def reset_interrupted_analyses() -> None:
     """Games left 'running' by a previous server process will never finish; mark them failed."""
     from sqlmodel import select
 
-    from app.models import Game
+    from app.models import BUSY, Game
 
     with Session(engine) as session:
         for game in session.exec(select(Game).where(Game.analysis_status == "running")):
             game.analysis_status = "error"
             game.analysis_error = "Interrupted (server restarted). Click Analyse to retry."
             session.add(game)
-        for game in session.exec(select(Game).where(Game.coach_status.in_(["running", "queued", "stopping"]))):
+        for game in session.exec(select(Game).where(Game.coach_status.in_(BUSY))):
             game.coach_status = "stopped"
             game.coach_error = "Stopped because the server restarted. Explanations made so far are kept."
             session.add(game)

@@ -438,6 +438,28 @@ def test_stop_before_review_starts_can_be_restarted(client, fixture_text):
     assert client.get(f"/api/games/{gid}/coach/status").json()["status"] == "stopped"
 
 
+def test_busy_game_cannot_be_deleted_or_reanalysed(client, fixture_text):
+    from sqlmodel import Session
+
+    from app.db import engine as db_engine
+    from app.models import Game
+
+    gid = _upload(client, fixture_text("scholars_mate.pgn"))
+
+    def set_status(status):
+        with Session(db_engine) as s:
+            g = s.get(Game, gid)
+            g.coach_status = status
+            s.add(g)
+            s.commit()
+
+    set_status("running")  # a review job is writing notes for this game's moves
+    assert client.delete(f"/api/games/{gid}").status_code == 409
+    assert client.post(f"/api/games/{gid}/analyze").status_code == 409
+    set_status("stopped")
+    assert client.delete(f"/api/games/{gid}").status_code == 204
+
+
 def test_saved_usernames_set_my_colour_on_upload(client):
     PGN = '[White "Someone"]\n[Black "Other"]\n[Date "2024.02.02"]\n[Result "1-0"]\n\n1. e4 e5 1-0\n'
     assert client.get("/api/usernames").json()["usernames"] == []

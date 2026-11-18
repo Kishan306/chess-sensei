@@ -2,7 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlmodel import Session
 
 from app.db import get_session
-from app.models import Game
+from app.models import BUSY, Game
 from app.schemas import StatusOut
 from app.services.engine_service import analyze_game
 
@@ -16,6 +16,8 @@ def start_analysis(game_id: int, background: BackgroundTasks, session: Session =
         raise HTTPException(404, "Game not found")
     if game.analysis_status == "running":
         return StatusOut(status=game.analysis_status, progress=game.analysis_progress)
+    if game.coach_status in BUSY:  # re-analysing deletes the moves the review is writing notes for
+        raise HTTPException(409, "Wait for the coach review to finish, or stop it first.")
     game.analysis_status, game.analysis_progress, game.analysis_error = "running", 0, None
     session.add(game)
     session.commit()

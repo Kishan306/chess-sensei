@@ -670,7 +670,8 @@ async function showStatus() {
     const msg = st.status === "error" ? `Analysis failed: ${st.error || "unknown error"}` : "This game hasn't been analysed yet.";
     card.replaceChildren(el("p", { class: st.status === "error" ? "error" : "" }, msg),
       el("button", { class: "primary", onclick: async () => {
-        await fetch(`/api/games/${gameId}/analyze`, { method: "POST" });
+        const res = await fetch(`/api/games/${gameId}/analyze`, { method: "POST" });
+        if (!res.ok) alert((await res.json()).detail || "Couldn't start the analysis.");
         waitForAnalysis();
       } }, "Analyse now"));
   }

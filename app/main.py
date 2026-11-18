@@ -1,9 +1,10 @@
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.db import backfill_fingerprints, create_db_and_tables, reset_interrupted_analyses
@@ -22,6 +23,16 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Chess Sensei", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def same_origin_writes(request, call_next):
+    """Other websites open in the browser must not trigger paid reviews or change data here.
+    Browsers send Origin on cross-site POST/PUT/PATCH/DELETE; ours matches Host."""
+    origin = request.headers.get("origin")
+    if request.method not in ("GET", "HEAD", "OPTIONS") and origin and urlsplit(origin).netloc != request.headers.get("host"):
+        return JSONResponse({"detail": "Cross-site request blocked."}, status_code=403)
+    return await call_next(request)
 
 
 @app.middleware("http")

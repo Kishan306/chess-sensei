@@ -164,7 +164,7 @@ def coach_status(game_id: int, session: Session = Depends(get_session)):
     return StatusOut(status=game.coach_status, progress=game.coach_progress, error=game.coach_error)
 
 
-@router.get("/moves/{move_id}/coach")
+@router.post("/moves/{move_id}/coach")
 def move_coach(move_id: int, refresh: bool = False, session: Session = Depends(get_session)):
     """Coach note for one move; generated on demand (takes a few seconds) if missing."""
     game, move, previous = _move_context(session, move_id)

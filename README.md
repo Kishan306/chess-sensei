@@ -106,7 +106,7 @@ are skipped automatically if `STOCKFISH_PATH` doesn't point at a working engine.
 | GET | `/api/games/{id}/status` | Analysis progress |
 | POST | `/api/games/{id}/coach` | Coach notes for all mistakes + game summary (background; `refresh=true` to redo) |
 | GET | `/api/games/{id}/coach/status` | Coaching progress |
-| GET | `/api/moves/{id}/coach` | Coach note for one move (generated on demand) |
+| POST | `/api/moves/{id}/coach` | Coach note for one move (generated on demand) |
 | POST | `/api/moves/{id}/ask` | Follow-up question about a position |
 
 ## Config (`.env`)

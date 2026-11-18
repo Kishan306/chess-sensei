@@ -331,7 +331,7 @@ async function explainMove(m) {
   loadingNotes.add(m.id);
   renderMoveInfo();
   try {
-    const res = await fetch(`/api/moves/${m.id}/coach`);
+    const res = await fetch(`/api/moves/${m.id}/coach`, { method: "POST" });
     const body = await res.json();
     if (!res.ok) throw new Error(body.detail || "The coach couldn't explain this move.");
     game.notes = { ...(game.notes || {}), [m.id]: body };

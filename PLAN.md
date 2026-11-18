@@ -130,7 +130,7 @@ For each flagged move, compute and store as JSON:
 | POST | `/api/games/{id}/analyze` | Start engine analysis (background) |
 | GET | `/api/games/{id}/status` | Analysis progress |
 | POST | `/api/games/{id}/coach` | Generate coach notes for all flagged moves + game summary |
-| GET | `/api/moves/{id}/coach` | Coach note for one move (generate on demand if missing) |
+| POST | `/api/moves/{id}/coach` | Coach note for one move (generate on demand if missing) |
 | POST | `/api/moves/{id}/ask` | Follow-up question about a position ("why not Bxf7?") — that move gets engine-checked first |
 | GET | `/api/profile` | Aggregated weaknesses (phase 3) |
 | GET | `/api/puzzles/due` · POST `/api/puzzles/{id}/attempt` | Drills (phase 3) |

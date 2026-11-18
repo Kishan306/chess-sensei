@@ -55,6 +55,14 @@ def test_set_my_color(client, fixture_text):
     assert client.get("/api/games", params={"color": "black"}).json()[0]["id"] == gid
 
 
+def test_cross_site_writes_blocked(client):
+    evil = {"Origin": "https://evil.example"}
+    assert client.post("/api/games/1/coach", headers=evil).status_code == 403
+    assert client.get("/api/games", headers=evil).status_code == 200  # reads stay open
+    same = {"Origin": "http://testserver"}
+    assert client.put("/api/settings", json={"masterclass": False}, headers=same).status_code == 200
+
+
 def test_upload_nothing(client):
     body = client.post("/api/games", data={"pgn": ""}).json()
     assert body["created"] == [] and body["errors"]
@@ -164,7 +172,7 @@ def test_coach_endpoints_with_fakes(client, fixture_text, monkeypatch):
     assert game["notes"][str(qg5["id"])]["headline"] == "The queen was left hanging."
     assert game["summary"]["practice_next"] == "Blunder-check every move."
 
-    note = client.get(f"/api/moves/{qg5['id']}/coach").json()
+    note = client.post(f"/api/moves/{qg5['id']}/coach").json()
     assert note["better_move"] == qg5["best_move_san"]  # unverified "Nc6" replaced by the engine move
 
     res = client.post(f"/api/moves/{qg5['id']}/ask", json={"question": "Why not Nc6?"})
@@ -270,10 +278,10 @@ def test_masterclass_explains_every_move(client, fixture_text, monkeypatch):
         # Good moves can be explained on demand only in Masterclass
         e4 = game["moves"][0]
         nxg5 = game["moves"][4]
-        assert client.get(f"/api/moves/{nxg5['id']}/coach").json()["kind"] == "move"
+        assert client.post(f"/api/moves/{nxg5['id']}/coach").json()["kind"] == "move"
     finally:
         client.put("/api/settings", json={"masterclass": False})
-    assert client.get(f"/api/moves/{e4['id']}/coach", params={"refresh": True}).status_code == 400
+    assert client.post(f"/api/moves/{e4['id']}/coach", params={"refresh": True}).status_code == 400
 
 
 def test_coach_all_queues_and_analyses(client, fixture_text, monkeypatch):

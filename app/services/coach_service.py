@@ -742,7 +742,12 @@ def coach_game(game_id: int, refresh: bool = False, llm: Optional[LLMFn] = None,
     run_settings = settings_for(mode, settings)
     with Session(db_engine) as session:
         game = session.get(Game, game_id)
-        if not game or game.coach_status in ("stopping", "stopped"):
+        if not game or game.coach_status == "stopped":
+            return
+        if game.coach_status == "stopping":  # Stop clicked before the job started
+            game.coach_status, game.coach_error = "stopped", "Stopped before it started."
+            session.add(game)
+            session.commit()
             return
         moves = list(session.exec(select(Move).where(Move.game_id == game_id).order_by(Move.ply)))
         targets = coach_targets(game, moves, mode, settings)

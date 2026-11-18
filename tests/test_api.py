@@ -421,6 +421,23 @@ def test_stop_queued_game_is_skipped(client, fixture_text, monkeypatch):
     assert client.post("/api/coach/stop").json() == {"stopped": 0}
 
 
+def test_stop_before_review_starts_can_be_restarted(client, fixture_text):
+    from sqlmodel import Session
+
+    from app.db import engine as db_engine
+    from app.models import Game
+    from app.services import coach_service
+
+    gid = _upload(client, fixture_text("queen_blunder.pgn"))
+    with Session(db_engine) as s:
+        g = s.get(Game, gid)
+        g.coach_status = "stopping"  # Stop clicked between the route and the job starting
+        s.add(g)
+        s.commit()
+    coach_service.coach_game(gid)
+    assert client.get(f"/api/games/{gid}/coach/status").json()["status"] == "stopped"
+
+
 def test_saved_usernames_set_my_colour_on_upload(client):
     PGN = '[White "Someone"]\n[Black "Other"]\n[Date "2024.02.02"]\n[Result "1-0"]\n\n1. e4 e5 1-0\n'
     assert client.get("/api/usernames").json()["usernames"] == []

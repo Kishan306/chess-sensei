@@ -63,6 +63,14 @@ def test_cross_site_writes_blocked(client):
     assert client.put("/api/settings", json={"masterclass": False}, headers=same).status_code == 200
 
 
+def test_upload_too_big(client, monkeypatch):
+    from app.routes import games
+
+    monkeypatch.setattr(games, "MAX_UPLOAD_BYTES", 10)
+    res = client.post("/api/games", files={"file": ("big.pgn", b"1. e4 e5 2. Nf3 *")})
+    assert res.status_code == 413
+
+
 def test_upload_nothing(client):
     body = client.post("/api/games", data={"pgn": ""}).json()
     assert body["created"] == [] and body["errors"]

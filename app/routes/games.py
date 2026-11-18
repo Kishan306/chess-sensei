@@ -11,6 +11,7 @@ from app.services import app_settings, pgn_service
 from app.services.engine_service import analyze_game, clear_coaching, ensure_tags, moves_for_game
 
 router = APIRouter(prefix="/api/games", tags=["games"])
+MAX_UPLOAD_BYTES = 20_000_000  # thousands of games; stops a wrong file from filling memory
 
 
 @router.post("", response_model=UploadResult)
@@ -29,7 +30,9 @@ async def upload_games(
     if pgn and pgn.strip():
         parts.append(pgn)
     if file is not None and file.filename:
-        raw = await file.read()
+        raw = await file.read(MAX_UPLOAD_BYTES + 1)
+        if len(raw) > MAX_UPLOAD_BYTES:
+            raise HTTPException(413, f"The file is too big (limit {MAX_UPLOAD_BYTES // 1_000_000} MB).")
         parts.append(raw.decode("utf-8", errors="replace"))
     text = "\n\n".join(parts)
 

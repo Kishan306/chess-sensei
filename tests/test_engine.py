@@ -197,7 +197,8 @@ def test_cache_stores_reached_depth_and_reuses_by_budget():
     db = create_engine("sqlite://")
     SQLModel.metadata.create_all(db)
     with Session(db) as session:
-        a = EngineAnalyzer(session, Settings(engine_depth=18, engine_time=0.5, engine_deep_depth=24, engine_deep_time=3))
+        a = EngineAnalyzer(session, Settings(engine_depth=18, engine_time=0.5, engine_deep_depth=24, engine_deep_time=3,
+                                            engine_multipv=1))  # the fake engine returns one line
         a.engine = _FakeEngine(depth=12)  # quick search times out at depth 12
         board = chess.Board()
 
@@ -249,3 +250,25 @@ def test_parallel_jobs_search_one_at_a_time(tmp_path):
     for t in threads:
         t.join()
     assert not errors and max(overlaps) == 1
+
+
+def test_cache_searches_again_when_more_lines_are_wanted():
+    db = create_engine("sqlite://")
+    SQLModel.metadata.create_all(db)
+    with Session(db) as session:
+        a = EngineAnalyzer(session, Settings(engine_multipv=1))
+        a.engine = _FakeEngine(depth=30)  # returns one line
+        board = chess.Board()
+        a.analyse(board)
+        a.analyse(board)
+        assert a.engine.calls == 1  # one line was asked for and stored
+
+        a.settings = Settings(engine_multipv=3)  # user raised ENGINE_MULTIPV
+        a.analyse(board)
+        assert a.engine.calls == 2
+
+        only_move = chess.Board("7k/8/8/8/8/8/1q6/K7 w - - 0 1")  # in check, Kxb2 is the only move
+        a.analyse(only_move)
+        a.analyse(only_move)
+        assert a.engine.calls == 3  # one line is all there can be: reused
+        a.engine = None

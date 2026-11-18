@@ -67,14 +67,16 @@ class EngineAnalyzer:
 
         deep=True uses the slower ENGINE_DEEP_* limits (used to re-check mistakes).
         Results are cached by position; a cached result is reused when it was searched with
-        at least the same budget (depth actually reached, or time allowed).
+        at least the same budget (depth actually reached, or time allowed) and has as many
+        lines as ENGINE_MULTIPV asks for (or as there are legal moves).
         """
         with _search_lock:
             s = self.settings
             depth, time_limit = (s.engine_deep_depth, s.engine_deep_time) if deep else (s.engine_depth, s.engine_time)
             key = board.epd()
             cached = self.session.get(EvalCache, key)
-            if cached and cached.multipv and (cached.depth >= depth or (cached.time_limit or 0) >= time_limit):
+            enough_lines = cached and cached.multipv and len(cached.multipv) >= min(s.engine_multipv, board.legal_moves.count())
+            if enough_lines and (cached.depth >= depth or (cached.time_limit or 0) >= time_limit):
                 return cached.multipv
 
             infos = self.engine.analyse(

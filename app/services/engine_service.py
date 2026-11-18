@@ -1,6 +1,7 @@
 """Stockfish wrapper with an eval cache, plus the background job that analyses a whole game."""
 import io
 import logging
+import threading
 from typing import Optional
 
 import chess
@@ -13,6 +14,12 @@ from app.models import CoachNote, EvalCache, Game, GameSummary, Move
 from app.services import classify, facts, tags
 
 log = logging.getLogger(__name__)
+
+# One search at a time across all jobs and requests: parallel engines starve each other's
+# time-limited searches (and cache the weak results), and race on inserting the same cache row.
+# shortcut: each job still starts its own engine, which holds its hash while waiting; share one
+# engine if many jobs at once ever use too much memory.
+_search_lock = threading.Lock()
 
 
 def _line_to_san(board: chess.Board, ucis: list[str]) -> list[str]:
@@ -62,37 +69,38 @@ class EngineAnalyzer:
         Results are cached by position; a cached result is reused when it was searched with
         at least the same budget (depth actually reached, or time allowed).
         """
-        s = self.settings
-        depth, time_limit = (s.engine_deep_depth, s.engine_deep_time) if deep else (s.engine_depth, s.engine_time)
-        key = board.epd()
-        cached = self.session.get(EvalCache, key)
-        if cached and cached.multipv and (cached.depth >= depth or (cached.time_limit or 0) >= time_limit):
-            return cached.multipv
+        with _search_lock:
+            s = self.settings
+            depth, time_limit = (s.engine_deep_depth, s.engine_deep_time) if deep else (s.engine_depth, s.engine_time)
+            key = board.epd()
+            cached = self.session.get(EvalCache, key)
+            if cached and cached.multipv and (cached.depth >= depth or (cached.time_limit or 0) >= time_limit):
+                return cached.multipv
 
-        infos = self.engine.analyse(
-            board, chess.engine.Limit(depth=depth, time=time_limit), multipv=s.engine_multipv
-        )
-        lines = []
-        for info in infos:
-            pv = info.get("pv") or []
-            if not pv:
-                continue
-            score = info["score"].white()
-            ucis = [m.uci() for m in pv]
-            lines.append({
-                "uci": ucis,
-                "san": _line_to_san(board, ucis),
-                "cp": score.score(),
-                "mate": score.mate(),
-            })
-        reached = infos[0].get("depth", 0) if infos else 0
+            infos = self.engine.analyse(
+                board, chess.engine.Limit(depth=depth, time=time_limit), multipv=s.engine_multipv
+            )
+            lines = []
+            for info in infos:
+                pv = info.get("pv") or []
+                if not pv:
+                    continue
+                score = info["score"].white()
+                ucis = [m.uci() for m in pv]
+                lines.append({
+                    "uci": ucis,
+                    "san": _line_to_san(board, ucis),
+                    "cp": score.score(),
+                    "mate": score.mate(),
+                })
+            reached = infos[0].get("depth", 0) if infos else 0
 
-        if cached:
-            cached.depth, cached.time_limit, cached.multipv = reached, time_limit, lines
-        else:
-            self.session.add(EvalCache(fen=key, depth=reached, time_limit=time_limit, multipv=lines))
-        self.session.commit()
-        return lines
+            if cached:
+                cached.depth, cached.time_limit, cached.multipv = reached, time_limit, lines
+            else:
+                self.session.add(EvalCache(fen=key, depth=reached, time_limit=time_limit, multipv=lines))
+            self.session.commit()
+            return lines
 
 
 def _position_eval(board: chess.Board, lines: list[dict]) -> dict:

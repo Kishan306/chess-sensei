@@ -215,3 +215,37 @@ def test_cache_stores_reached_depth_and_reuses_by_budget():
         a.analyse(board)  # deep result is good enough for a quick request too
         assert a.engine.calls == 2
         a.engine = None
+
+
+def test_parallel_jobs_search_one_at_a_time(tmp_path):
+    """Two analyses at once: no overlapping engine searches, and no clash inserting the same cache row."""
+    import threading
+
+    db = create_engine(f"sqlite:///{tmp_path}/c.db", connect_args={"check_same_thread": False})
+    SQLModel.metadata.create_all(db)
+    running, overlaps, errors = [0], [], []
+
+    class SlowEngine(_FakeEngine):
+        def analyse(self, board, limit, multipv):
+            running[0] += 1
+            overlaps.append(running[0])
+            time.sleep(0.05)
+            running[0] -= 1
+            return super().analyse(board, limit, multipv)
+
+    def job():
+        try:
+            with Session(db) as session:
+                a = EngineAnalyzer(session, Settings())
+                a.engine = SlowEngine(depth=20)
+                a.analyse(chess.Board())
+                a.engine = None
+        except Exception as exc:
+            errors.append(exc)
+
+    threads = [threading.Thread(target=job) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert not errors and max(overlaps) == 1
